@@ -1,921 +1,622 @@
 //+------------------------------------------------------------------+
 //|                                              SMC_Breakout_EA.mq4 |
-//|              SMC Breakout Level Auto Limit Order Trading System   |
-//|                                                                  |
-//|  - 스윙 하이/로우 감지 후 지정가(Limit) 주문 자동 배치           |
-//|  - 스프레드/슬리피지 회피를 위한 사전 지정가 전략                 |
-//|  - 트레일링 스탑 지원                                            |
+//|         SMC Breakout v5.0 - 주요 레벨만 + 재진입 방지            |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026"
 #property link      ""
-#property version   "1.00"
+#property version   "5.00"
 #property strict
 
-//+------------------------------------------------------------------+
-//| Input Parameters                                                 |
-//+------------------------------------------------------------------+
-//=== 시그널 파라미터 ===
-input int       SwingSize           = 5;        // 스윙 크기 (좌우 확인 캔들 수)
+//=== 시그널 ===
+input int       SwingSize           = 5;        // 스윙 크기 (좌우 캔들)
 input int       MaxLevelsPerSide    = 3;        // 방향별 최대 주문 수
-input int       CandlesBeforeExpiry = 50;       // 레벨 만료 캔들 수
-input double    MinLevelDistance    = 10.0;     // 최소 레벨 간격 (pips)
-input int       ScanRange           = 500;      // 스캔 범위 (캔들 수)
+input int       CandlesBeforeExpiry = 100;      // 레벨 만료 캔들 수
+input double    MinLevelDistPips    = 30.0;     // 최소 레벨 간격 (pips)
+input double    MaxLevelDistPips    = 300.0;    // 최대 레벨 거리 (pips)
+input int       ScanBars            = 100;      // 스캔 범위
+input int       MinTouchCount       = 2;        // 최소 터치 횟수 (레벨 강도)
+input double    TouchZonePips       = 5.0;      // 터치 판정 범위 (pips)
 
-//=== 주문 파라미터 ===
-input double    LotSize             = 0.01;     // 고정 랏 사이즈
-input int       StopLossPoints      = 300;      // 손절 (포인트)
-input int       TakeProfitPoints    = 500;      // 익절 (포인트)
-input int       MagicNumber         = 20260208; // 매직 넘버
+//=== 주문 ===
+input double    LotSize             = 0.01;
+input int       StopLossPoints      = 300;
+input int       TakeProfitPoints    = 500;
+input int       MagicNumber         = 20260208;
 
-//=== 트레일링 스탑 ===
-input bool      UseTrailing         = true;     // 트레일링 스탑 사용
-input int       TrailingStartPoints = 50;       // 트레일링 시작 (포인트, 수익)
-input int       TrailingStepPoints  = 50;       // 트레일링 스텝 (포인트)
+//=== 트레일링 ===
+input bool      UseTrailing         = true;
+input int       TrailStartPts       = 50;
+input int       TrailStepPts        = 50;
 
-//=== 안전 필터 ===
-input double    MaxSpreadPips       = 5.0;      // 최대 스프레드 (pips)
-input bool      UseTradingHours     = false;    // 거래시간 필터 사용
-input int       TradingStartHour    = 8;        // 거래 시작 시간 (서버시간)
-input int       TradingEndHour      = 22;       // 거래 종료 시간 (서버시간)
-input bool      DeleteOnFriday      = false;    // 금요일 대기주문 삭제
-input int       FridayCloseHour     = 20;       // 금요일 삭제 시간
+//=== 필터 ===
+input double    MaxSpreadPips       = 30.0;
+input bool      UseTradingHours     = false;
+input int       StartHour           = 8;
+input int       EndHour             = 22;
+
+//=== 재진입 방지 ===
+input double    UsedZonePips        = 20.0;     // 사용된 레벨 근처 재진입 금지 범위
+input int       MaxUsedHistory      = 50;       // 기록 보관 개수
 
 //=== 표시 ===
-input bool      ShowPanel           = true;     // 상태 패널 표시
-input bool      ShowLevelLines      = true;     // 레벨 라인 표시
-input color     BullishColor        = clrAqua;  // 롱 레벨 색상
-input color     BearishColor        = clrOrangeRed; // 숏 레벨 색상
-input int       FontSize            = 9;        // 폰트 크기
+input bool      ShowPanel           = true;
+input bool      ShowLines           = true;
+input color     BuyColor            = clrAqua;
+input color     SellColor           = clrOrangeRed;
+input int       FontSize            = 9;
 
 //+------------------------------------------------------------------+
-//| Data Structures                                                  |
-//+------------------------------------------------------------------+
 struct EALevel {
-   double   price;         // 레벨 가격
-   int      barIndex;      // 생성 바 인덱스
-   bool     isBullish;     // true=BuyLimit, false=SellLimit
-   bool     active;        // 활성 여부
-   int      ticket;        // 주문 티켓 (-1=미배치)
-   datetime createTime;    // 생성 시간
+   double   price;
+   int      barAge;
+   bool     isBullish;
+   bool     active;
+   int      ticket;
+   int      touchCount;
 };
 
 //+------------------------------------------------------------------+
-//| Global Variables                                                 |
-//+------------------------------------------------------------------+
+double     g_pip;
+datetime   g_lastBar = 0;
 EALevel    g_levels[];
-double     g_pointSize;
-datetime   g_lastBarTime = 0;
-int        g_levelCounter = 0;
+
+// 사용된 레벨 기록 (재진입 방지)
+double     g_usedPrices[];
+bool       g_usedDirection[];
+int        g_usedCount = 0;
 
 // 통계
-int        g_totalBuyLimits = 0;
-int        g_totalSellLimits = 0;
-int        g_totalBuyTrades = 0;
-int        g_totalSellTrades = 0;
-double     g_sessionPL = 0;
+int        g_statSwH=0, g_statSwL=0, g_statCreated=0;
+int        g_statOrders=0, g_statFilled=0, g_statFiltered=0;
 
-//+------------------------------------------------------------------+
-//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   // 포인트 사이즈 계산
-   g_pointSize = Point;
-   if(Digits == 3 || Digits == 5) g_pointSize = Point * 10;
+   g_pip = Point;
+   if(Digits == 3 || Digits == 5) g_pip = Point * 10;
 
-   // 입력값 검증
-   if(LotSize <= 0)
+   if(LotSize <= 0 || StopLossPoints <= 0 || TakeProfitPoints <= 0)
    {
-      Alert("SMC EA: 랏 사이즈가 0 이하입니다!");
-      return(INIT_PARAMETERS_INCORRECT);
-   }
-   if(StopLossPoints <= 0 || TakeProfitPoints <= 0)
-   {
-      Alert("SMC EA: SL/TP가 0 이하입니다!");
+      Alert("파라미터 오류!");
       return(INIT_PARAMETERS_INCORRECT);
    }
 
-   // 초기화
    ArrayResize(g_levels, 0);
-   g_levelCounter = 0;
+   ArrayResize(g_usedPrices, 0);
+   ArrayResize(g_usedDirection, 0);
+   g_usedCount = 0;
 
-   // 기존 주문 복원 (EA 재시작 대비)
    ScanExistingOrders();
 
-   Print("SMC Breakout EA v1.0 초기화 완료");
-   Print("설정: Lot=", LotSize, " SL=", StopLossPoints, "pt TP=", TakeProfitPoints, "pt");
-   Print("트레일링: ", UseTrailing ? "ON" : "OFF",
-         " Start=", TrailingStartPoints, "pt Step=", TrailingStepPoints, "pt");
+   Print("=== SMC Breakout EA v5.0 ===");
+   Print("MinTouch=", MinTouchCount, " TouchZone=", TouchZonePips, "pip");
+   Print("UsedZone=", UsedZonePips, "pip (재진입 금지)");
 
    return(INIT_SUCCEEDED);
 }
 
-//+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
-//+------------------------------------------------------------------+
-void OnDeinit(const int reason)
-{
-   CleanupObjects();
-   Print("SMC Breakout EA 종료. 사유: ", reason);
-}
+void OnDeinit(const int reason) { CleanupObjects(); }
 
-//+------------------------------------------------------------------+
-//| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // 1. 새 바 감지
-   bool newBar = false;
-   if(g_lastBarTime != Time[0])
-   {
-      g_lastBarTime = Time[0];
-      newBar = true;
-   }
-
-   // 2. 새 바에서만 레벨 스캔 및 생성
+   bool newBar = (g_lastBar != Time[0]);
    if(newBar)
    {
-      // 스윙 포인트에서 새 레벨 체크
-      CheckNewLevels();
-
-      // 만료된 레벨 정리
-      UpdateActiveLevels();
-
-      // 주문 동기화 (새 레벨에 주문 배치)
-      SyncOrdersWithLevels();
+      g_lastBar = Time[0];
+      CleanupInactive();
+      ScanLevels();
+      AgeLevels();
+      SyncOrders();
    }
 
-   // 3. 매 틱마다 트레일링 스탑 관리
-   if(UseTrailing)
-      ManageTrailingStop();
-
-   // 4. 주문 상태 확인 (체결/삭제 감지)
-   CheckOrderStatus();
-
-   // 5. 패널 업데이트
+   if(UseTrailing) DoTrailing();
+   CheckFills();
    if(ShowPanel) DrawPanel();
-   if(ShowLevelLines) DrawLevelLines();
+   if(ShowLines) DrawLines();
 }
 
 //+------------------------------------------------------------------+
-//| 스윙 하이 판별                                                    |
+void CleanupInactive()
+{
+   int w = 0;
+   for(int i = 0; i < ArraySize(g_levels); i++)
+   {
+      if(g_levels[i].active)
+      {
+         if(w != i) g_levels[w] = g_levels[i];
+         w++;
+      }
+   }
+   if(w < ArraySize(g_levels)) ArrayResize(g_levels, w);
+}
+
 //+------------------------------------------------------------------+
 bool IsSwingHigh(int bar)
 {
    if(bar - SwingSize < 0 || bar + SwingSize >= Bars) return false;
-
    for(int j = 1; j <= SwingSize; j++)
    {
-      if(High[bar] <= High[bar + j] || High[bar] <= High[bar - j])
+      if(High[bar] <= High[bar+j] || High[bar] <= High[bar-j])
          return false;
    }
    return true;
 }
 
-//+------------------------------------------------------------------+
-//| 스윙 로우 판별                                                    |
-//+------------------------------------------------------------------+
 bool IsSwingLow(int bar)
 {
    if(bar - SwingSize < 0 || bar + SwingSize >= Bars) return false;
-
    for(int j = 1; j <= SwingSize; j++)
    {
-      if(Low[bar] >= Low[bar + j] || Low[bar] >= Low[bar - j])
+      if(Low[bar] >= Low[bar+j] || Low[bar] >= Low[bar-j])
          return false;
    }
    return true;
 }
 
 //+------------------------------------------------------------------+
-//| 새 레벨 체크 (새 바 마다)                                         |
-//+------------------------------------------------------------------+
-void CheckNewLevels()
+int CountTouches(double price, bool isResistance, int fromBar, int toBar)
 {
-   // SwingSize 위치의 캔들이 스윙인지 확인
-   // (오른쪽 캔들이 SwingSize개 확정된 시점)
-   int checkBar = SwingSize;
+   int touches = 0;
+   double zone = TouchZonePips * g_pip;
 
-   // 상승 레벨 (스윙 하이 → 가격이 다시 올라오면 BuyLimit)
-   if(IsSwingHigh(checkBar))
+   for(int i = fromBar; i < toBar && i < Bars; i++)
    {
-      double level = High[checkBar];
-
-      // 현재 가격보다 위에 있어야 BuyLimit 가능
-      if(level > Ask)
+      if(isResistance)
       {
-         if(!LevelExists(level, true) && CountActiveLevels(true) < MaxLevelsPerSide)
-         {
-            AddLevel(level, checkBar, true);
-            Print("새 BUY LIMIT 레벨: ", DoubleToStr(level, Digits));
-         }
+         if(MathAbs(High[i] - price) < zone && Close[i] < price)
+            touches++;
+      }
+      else
+      {
+         if(MathAbs(Low[i] - price) < zone && Close[i] > price)
+            touches++;
       }
    }
-
-   // 하락 레벨 (스윙 로우 → 가격이 다시 내려오면 SellLimit)
-   if(IsSwingLow(checkBar))
-   {
-      double level = Low[checkBar];
-
-      // 현재 가격보다 아래에 있어야 SellLimit 가능
-      if(level < Bid)
-      {
-         if(!LevelExists(level, false) && CountActiveLevels(false) < MaxLevelsPerSide)
-         {
-            AddLevel(level, checkBar, false);
-            Print("새 SELL LIMIT 레벨: ", DoubleToStr(level, Digits));
-         }
-      }
-   }
+   return touches;
 }
 
 //+------------------------------------------------------------------+
-//| 레벨 중복 체크                                                    |
-//+------------------------------------------------------------------+
-bool LevelExists(double price, bool isBullish)
+bool IsPriceUsed(double price, bool isBull)
 {
-   double minDist = MinLevelDistance * g_pointSize;
+   double zone = UsedZonePips * g_pip;
 
-   for(int i = 0; i < ArraySize(g_levels); i++)
+   for(int i = 0; i < g_usedCount; i++)
    {
-      if(g_levels[i].active &&
-         g_levels[i].isBullish == isBullish &&
-         MathAbs(g_levels[i].price - price) < minDist)
-      {
+      if(g_usedDirection[i] == isBull &&
+         MathAbs(g_usedPrices[i] - price) < zone)
          return true;
-      }
    }
    return false;
 }
 
-//+------------------------------------------------------------------+
-//| 활성 레벨 수 카운트                                               |
-//+------------------------------------------------------------------+
-int CountActiveLevels(bool isBullish)
+void MarkPriceUsed(double price, bool isBull)
 {
-   int count = 0;
+   if(g_usedCount >= MaxUsedHistory)
+   {
+      for(int i = 0; i < g_usedCount - 1; i++)
+      {
+         g_usedPrices[i] = g_usedPrices[i+1];
+         g_usedDirection[i] = g_usedDirection[i+1];
+      }
+      g_usedCount--;
+   }
+
+   ArrayResize(g_usedPrices, g_usedCount + 1);
+   ArrayResize(g_usedDirection, g_usedCount + 1);
+   g_usedPrices[g_usedCount] = price;
+   g_usedDirection[g_usedCount] = isBull;
+   g_usedCount++;
+
+   Print("가격 기록: ", DoubleToStr(price, Digits), isBull ? " (Buy)" : " (Sell)",
+         " 총 ", g_usedCount, "개");
+}
+
+//+------------------------------------------------------------------+
+void ScanLevels()
+{
+   g_statSwH = 0;
+   g_statSwL = 0;
+   g_statFiltered = 0;
+
+   double maxDist = MaxLevelDistPips * g_pip;
+   int scanEnd = MathMin(ScanBars, Bars - SwingSize - 1);
+
+   for(int i = SwingSize + 1; i < scanEnd; i++)
+   {
+      //--- 저항 (스윙 하이) -> Buy Stop ---
+      if(IsSwingHigh(i))
+      {
+         g_statSwH++;
+         double resistance = High[i];
+         double dist = resistance - Ask;
+
+         if(dist > 0 && dist < maxDist)
+         {
+            int touches = CountTouches(resistance, true, i+1, i + ScanBars);
+
+            if(touches < MinTouchCount)
+            {
+               g_statFiltered++;
+               continue;
+            }
+
+            if(IsPriceUsed(resistance, true))
+               continue;
+
+            if(!LevelExists(resistance, true) && CountActive(true) < MaxLevelsPerSide)
+            {
+               AddLevel(resistance, true, touches);
+            }
+         }
+      }
+
+      //--- 지지 (스윙 로우) -> Sell Stop ---
+      if(IsSwingLow(i))
+      {
+         g_statSwL++;
+         double support = Low[i];
+         double dist = Bid - support;
+
+         if(dist > 0 && dist < maxDist)
+         {
+            int touches = CountTouches(support, false, i+1, i + ScanBars);
+
+            if(touches < MinTouchCount)
+            {
+               g_statFiltered++;
+               continue;
+            }
+
+            if(IsPriceUsed(support, false))
+               continue;
+
+            if(!LevelExists(support, false) && CountActive(false) < MaxLevelsPerSide)
+            {
+               AddLevel(support, false, touches);
+            }
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+bool LevelExists(double price, bool isBull)
+{
+   double minD = MinLevelDistPips * g_pip;
+
    for(int i = 0; i < ArraySize(g_levels); i++)
    {
-      if(g_levels[i].active && g_levels[i].isBullish == isBullish)
-         count++;
+      if(g_levels[i].active && g_levels[i].isBullish == isBull &&
+         MathAbs(g_levels[i].price - price) < minD)
+         return true;
    }
-   return count;
+
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
+      if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
+      if(OrderType() != OP_BUYSTOP && OrderType() != OP_SELLSTOP) continue;
+      if(MathAbs(OrderOpenPrice() - price) < minD) return true;
+   }
+
+   return false;
+}
+
+int CountActive(bool isBull)
+{
+   int c = 0;
+   for(int i = 0; i < ArraySize(g_levels); i++)
+      if(g_levels[i].active && g_levels[i].isBullish == isBull) c++;
+   return c;
 }
 
 //+------------------------------------------------------------------+
-//| 레벨 추가                                                        |
-//+------------------------------------------------------------------+
-void AddLevel(double price, int barIdx, bool isBullish)
+void AddLevel(double price, bool isBull, int touches)
 {
-   int size = ArraySize(g_levels);
-   ArrayResize(g_levels, size + 1);
+   int sz = ArraySize(g_levels);
+   ArrayResize(g_levels, sz + 1);
+   g_levels[sz].price      = NormalizeDouble(price, Digits);
+   g_levels[sz].barAge     = 0;
+   g_levels[sz].isBullish  = isBull;
+   g_levels[sz].active     = true;
+   g_levels[sz].ticket     = -1;
+   g_levels[sz].touchCount = touches;
+   g_statCreated++;
 
-   g_levels[size].price      = NormalizeDouble(price, Digits);
-   g_levels[size].barIndex   = barIdx;
-   g_levels[size].isBullish  = isBullish;
-   g_levels[size].active     = true;
-   g_levels[size].ticket     = -1;  // 아직 주문 안 넣음
-   g_levels[size].createTime = TimeCurrent();
+   Print("+ ", isBull ? "저항 BuyStop" : "지지 SellStop", " ",
+         DoubleToStr(price, Digits), " 터치=", touches, "회",
+         " 거리=", DoubleToStr(MathAbs(Close[0] - price) / g_pip, 1), "pip");
 }
 
 //+------------------------------------------------------------------+
-//| 활성 레벨 업데이트 (만료/무효화)                                   |
-//+------------------------------------------------------------------+
-void UpdateActiveLevels()
+void AgeLevels()
 {
+   double maxDist = MaxLevelDistPips * g_pip;
+
    for(int i = ArraySize(g_levels) - 1; i >= 0; i--)
    {
       if(!g_levels[i].active) continue;
+      g_levels[i].barAge++;
 
-      // 만료 체크: 생성 후 CandlesBeforeExpiry 캔들 경과
-      if(g_levels[i].barIndex >= CandlesBeforeExpiry)
+      if(g_levels[i].barAge > CandlesBeforeExpiry)
+      { KillLevel(i); continue; }
+
+      if(g_levels[i].isBullish && g_levels[i].ticket <= 0 &&
+         Bid > g_levels[i].price + 5 * g_pip)
       {
-         Print("레벨 만료: ", DoubleToStr(g_levels[i].price, Digits),
-               g_levels[i].isBullish ? " (Buy)" : " (Sell)");
-         RemoveLevel(i);
-         continue;
+         MarkPriceUsed(g_levels[i].price, true);
+         KillLevel(i); continue;
+      }
+      if(!g_levels[i].isBullish && g_levels[i].ticket <= 0 &&
+         Ask < g_levels[i].price - 5 * g_pip)
+      {
+         MarkPriceUsed(g_levels[i].price, false);
+         KillLevel(i); continue;
       }
 
-      // 바 인덱스 증가 (새 바가 생겼으므로)
-      g_levels[i].barIndex++;
-
-      // 가격이 레벨을 넘어갔으면 무효화
-      if(g_levels[i].isBullish)
-      {
-         // BuyLimit인데 가격이 이미 위에 있으면 → 유지 (아직 내려올 수 있음)
-         // BuyLimit인데 가격이 너무 아래로 멀어지면 → 무효화
-         if(g_levels[i].price - Ask > 200 * g_pointSize)
-         {
-            Print("레벨 무효화 (너무 먼): ", DoubleToStr(g_levels[i].price, Digits));
-            RemoveLevel(i);
-         }
-      }
-      else
-      {
-         // SellLimit인데 가격이 너무 위로 멀어지면 → 무효화
-         if(Bid - g_levels[i].price > 200 * g_pointSize)
-         {
-            Print("레벨 무효화 (너무 먼): ", DoubleToStr(g_levels[i].price, Digits));
-            RemoveLevel(i);
-         }
-      }
+      if(g_levels[i].isBullish && g_levels[i].price - Ask > maxDist)
+      { KillLevel(i); continue; }
+      if(!g_levels[i].isBullish && Bid - g_levels[i].price > maxDist)
+      { KillLevel(i); continue; }
    }
 }
 
-//+------------------------------------------------------------------+
-//| 레벨 제거 + 대기주문 삭제                                         |
-//+------------------------------------------------------------------+
-void RemoveLevel(int index)
+void KillLevel(int idx)
 {
-   if(index < 0 || index >= ArraySize(g_levels)) return;
+   if(idx < 0 || idx >= ArraySize(g_levels)) return;
+   if(g_levels[idx].ticket > 0) DeletePending(g_levels[idx].ticket);
+   g_levels[idx].active = false;
+}
 
-   // 대기 주문이 있으면 삭제
-   if(g_levels[index].ticket > 0)
+//+------------------------------------------------------------------+
+void SyncOrders()
+{
+   if(!IsTradeAllowed() || IsTradeContextBusy()) return;
+
+   double spread = MarketInfo(Symbol(), MODE_SPREAD) * Point / g_pip;
+   if(spread > MaxSpreadPips) return;
+
+   if(UseTradingHours)
    {
-      DeletePendingOrder(g_levels[index].ticket);
+      int h = TimeHour(TimeCurrent());
+      if(StartHour < EndHour)
+      { if(h < StartHour || h >= EndHour) return; }
+      else
+      { if(h < StartHour && h >= EndHour) return; }
    }
 
-   g_levels[index].active = false;
-
-   // 차트 오브젝트 삭제
-   string baseName = "SMCEA_Lv_" + IntegerToString(index);
-   ObjectDelete(baseName);
-   ObjectDelete(baseName + "_lbl");
-}
-
-//+------------------------------------------------------------------+
-//| 주문과 레벨 동기화                                                |
-//+------------------------------------------------------------------+
-void SyncOrdersWithLevels()
-{
-   // 안전 체크
-   if(!IsTradingAllowed()) return;
+   double stopLvl = MarketInfo(Symbol(), MODE_STOPLEVEL) * Point;
 
    for(int i = 0; i < ArraySize(g_levels); i++)
    {
-      if(!g_levels[i].active) continue;
-      if(g_levels[i].ticket > 0) continue; // 이미 주문 있음
+      if(!g_levels[i].active || g_levels[i].ticket > 0) continue;
 
-      // 스프레드 체크
-      double currentSpread = MarketInfo(Symbol(), MODE_SPREAD) * Point / g_pointSize;
-      if(currentSpread > MaxSpreadPips)
-      {
-         Print("스프레드 초과로 주문 보류: ", DoubleToStr(currentSpread, 1), " pips");
-         continue;
-      }
-
-      // 거래시간 체크
-      if(UseTradingHours && !IsWithinTradingHours()) continue;
-
-      // 금요일 체크
-      if(DeleteOnFriday && IsFridayClose())
-      {
-         RemoveLevel(i);
-         continue;
-      }
-
-      // 주문 배치
-      double price = g_levels[i].price;
+      double px = g_levels[i].price;
       double sl, tp;
 
       if(g_levels[i].isBullish)
       {
-         // BUY LIMIT: 현재가보다 아래에 배치 (가격이 내려와서 체결)
-         sl = NormalizeDouble(price - StopLossPoints * Point, Digits);
-         tp = NormalizeDouble(price + TakeProfitPoints * Point, Digits);
+         if(px <= Ask) continue;
+         if(px - Ask < stopLvl) continue;
 
-         // 가격이 현재 Ask보다 아래에 있어야 Buy Limit 가능
-         if(price >= Ask)
-         {
-            // Ask보다 위면 주문 불가 → 다음 틱에서 재시도
-            continue;
-         }
+         sl = NormalizeDouble(px - StopLossPoints * Point, Digits);
+         tp = NormalizeDouble(px + TakeProfitPoints * Point, Digits);
 
-         int ticket = PlaceBuyLimit(price, sl, tp);
-         if(ticket > 0)
+         int tk = OrderSend(Symbol(), OP_BUYSTOP, LotSize, px, 0, sl, tp,
+                            "SMCEA", MagicNumber, 0, BuyColor);
+         if(tk > 0)
          {
-            g_levels[i].ticket = ticket;
-            Print("BUY LIMIT 배치 성공: #", ticket, " @ ", DoubleToStr(price, Digits),
-                  " SL=", DoubleToStr(sl, Digits), " TP=", DoubleToStr(tp, Digits));
+            g_levels[i].ticket = tk;
+            g_statOrders++;
+            Print(">>> BuyStop #", tk, " @ ", DoubleToStr(px, Digits),
+                  " 터치=", g_levels[i].touchCount);
          }
       }
       else
       {
-         // SELL LIMIT: 현재가보다 위에 배치 (가격이 올라와서 체결)
-         sl = NormalizeDouble(price + StopLossPoints * Point, Digits);
-         tp = NormalizeDouble(price - TakeProfitPoints * Point, Digits);
+         if(px >= Bid) continue;
+         if(Bid - px < stopLvl) continue;
 
-         // 가격이 현재 Bid보다 위에 있어야 Sell Limit 가능
-         if(price <= Bid)
-         {
-            continue;
-         }
+         sl = NormalizeDouble(px + StopLossPoints * Point, Digits);
+         tp = NormalizeDouble(px - TakeProfitPoints * Point, Digits);
 
-         int ticket = PlaceSellLimit(price, sl, tp);
-         if(ticket > 0)
+         int tk = OrderSend(Symbol(), OP_SELLSTOP, LotSize, px, 0, sl, tp,
+                            "SMCEA", MagicNumber, 0, SellColor);
+         if(tk > 0)
          {
-            g_levels[i].ticket = ticket;
-            Print("SELL LIMIT 배치 성공: #", ticket, " @ ", DoubleToStr(price, Digits),
-                  " SL=", DoubleToStr(sl, Digits), " TP=", DoubleToStr(tp, Digits));
+            g_levels[i].ticket = tk;
+            g_statOrders++;
+            Print(">>> SellStop #", tk, " @ ", DoubleToStr(px, Digits),
+                  " 터치=", g_levels[i].touchCount);
          }
       }
    }
 }
 
 //+------------------------------------------------------------------+
-//| Buy Limit 주문                                                   |
-//+------------------------------------------------------------------+
-int PlaceBuyLimit(double price, double sl, double tp)
-{
-   price = NormalizeDouble(price, Digits);
-   sl = NormalizeDouble(sl, Digits);
-   tp = NormalizeDouble(tp, Digits);
-
-   // 스탑레벨 검증
-   double stopLevel = MarketInfo(Symbol(), MODE_STOPLEVEL) * Point;
-   if(Ask - price < stopLevel)
-   {
-      Print("BUY LIMIT 거부: 스탑레벨 미달 (", DoubleToStr(Ask - price, Digits),
-            " < ", DoubleToStr(stopLevel, Digits), ")");
-      return -1;
-   }
-
-   string comment = "SMCEA_BL_" + DoubleToStr(price, Digits);
-
-   int ticket = OrderSend(Symbol(), OP_BUYLIMIT, LotSize, price, 0, sl, tp,
-                           comment, MagicNumber, 0, BullishColor);
-
-   if(ticket < 0)
-   {
-      int err = GetLastError();
-      Print("BUY LIMIT 실패: 에러 ", err, " - ", ErrorDescription(err));
-
-      // 재시도 가능한 에러
-      if(err == ERR_REQUOTE || err == ERR_BROKER_BUSY || err == ERR_TRADE_CONTEXT_BUSY)
-      {
-         Sleep(500);
-         RefreshRates();
-         ticket = OrderSend(Symbol(), OP_BUYLIMIT, LotSize, price, 0, sl, tp,
-                            comment, MagicNumber, 0, BullishColor);
-         if(ticket < 0)
-            Print("BUY LIMIT 재시도 실패: 에러 ", GetLastError());
-      }
-   }
-
-   return ticket;
-}
-
-//+------------------------------------------------------------------+
-//| Sell Limit 주문                                                  |
-//+------------------------------------------------------------------+
-int PlaceSellLimit(double price, double sl, double tp)
-{
-   price = NormalizeDouble(price, Digits);
-   sl = NormalizeDouble(sl, Digits);
-   tp = NormalizeDouble(tp, Digits);
-
-   // 스탑레벨 검증
-   double stopLevel = MarketInfo(Symbol(), MODE_STOPLEVEL) * Point;
-   if(price - Bid < stopLevel)
-   {
-      Print("SELL LIMIT 거부: 스탑레벨 미달 (", DoubleToStr(price - Bid, Digits),
-            " < ", DoubleToStr(stopLevel, Digits), ")");
-      return -1;
-   }
-
-   string comment = "SMCEA_SL_" + DoubleToStr(price, Digits);
-
-   int ticket = OrderSend(Symbol(), OP_SELLLIMIT, LotSize, price, 0, sl, tp,
-                           comment, MagicNumber, 0, BearishColor);
-
-   if(ticket < 0)
-   {
-      int err = GetLastError();
-      Print("SELL LIMIT 실패: 에러 ", err, " - ", ErrorDescription(err));
-
-      if(err == ERR_REQUOTE || err == ERR_BROKER_BUSY || err == ERR_TRADE_CONTEXT_BUSY)
-      {
-         Sleep(500);
-         RefreshRates();
-         ticket = OrderSend(Symbol(), OP_SELLLIMIT, LotSize, price, 0, sl, tp,
-                            comment, MagicNumber, 0, BearishColor);
-         if(ticket < 0)
-            Print("SELL LIMIT 재시도 실패: 에러 ", GetLastError());
-      }
-   }
-
-   return ticket;
-}
-
-//+------------------------------------------------------------------+
-//| 대기주문 삭제                                                     |
-//+------------------------------------------------------------------+
-bool DeletePendingOrder(int ticket)
+bool DeletePending(int ticket)
 {
    if(ticket <= 0) return true;
-
    if(!OrderSelect(ticket, SELECT_BY_TICKET)) return true;
-
-   // 이미 체결되었거나 닫힌 주문이면 삭제할 필요 없음
    if(OrderCloseTime() > 0) return true;
-   if(OrderType() != OP_BUYLIMIT && OrderType() != OP_SELLLIMIT) return true;
-
-   for(int retry = 0; retry < 3; retry++)
+   if(OrderType() > OP_SELL)
    {
-      if(OrderDelete(ticket))
-      {
-         Print("대기주문 삭제 성공: #", ticket);
-         return true;
-      }
-
-      int err = GetLastError();
-      Print("대기주문 삭제 실패 (시도 ", retry + 1, "): #", ticket, " 에러=", err);
-
-      if(err == ERR_TRADE_CONTEXT_BUSY)
-         Sleep(500);
-      else
-         break;
+      if(OrderDelete(ticket)) return true;
    }
-
    return false;
 }
 
 //+------------------------------------------------------------------+
-//| 주문 상태 확인 (체결/외부삭제 감지)                               |
-//+------------------------------------------------------------------+
-void CheckOrderStatus()
+void CheckFills()
 {
    for(int i = 0; i < ArraySize(g_levels); i++)
    {
-      if(!g_levels[i].active) continue;
-      if(g_levels[i].ticket <= 0) continue;
+      if(!g_levels[i].active || g_levels[i].ticket <= 0) continue;
 
       if(!OrderSelect(g_levels[i].ticket, SELECT_BY_TICKET))
-      {
-         // 주문을 찾을 수 없음 → 외부 삭제
-         Print("주문 소실: #", g_levels[i].ticket, " → 레벨 비활성화");
-         g_levels[i].active = false;
-         continue;
-      }
+      { g_levels[i].active = false; continue; }
 
-      // 체결되었는지 확인
       if(OrderType() == OP_BUY || OrderType() == OP_SELL)
       {
-         // 지정가가 체결됨 → 레벨 비활성화 (포지션은 SL/TP/트레일링이 관리)
-         Print("주문 체결! #", g_levels[i].ticket, " @ ", DoubleToStr(OrderOpenPrice(), Digits),
-               g_levels[i].isBullish ? " (BUY)" : " (SELL)");
-         g_levels[i].active = false;
-         continue;
-      }
+         Print("*** 체결! #", g_levels[i].ticket,
+               g_levels[i].isBullish ? " BUY" : " SELL",
+               " @ ", DoubleToStr(OrderOpenPrice(), Digits));
 
-      // 삭제되었는지 확인
-      if(OrderCloseTime() > 0)
-      {
-         Print("주문 삭제됨: #", g_levels[i].ticket);
+         MarkPriceUsed(g_levels[i].price, g_levels[i].isBullish);
+
          g_levels[i].active = false;
+         g_statFilled++;
       }
+      else if(OrderCloseTime() > 0)
+         g_levels[i].active = false;
    }
 }
 
 //+------------------------------------------------------------------+
-//| 트레일링 스탑 관리                                                |
-//+------------------------------------------------------------------+
-void ManageTrailingStop()
+void DoTrailing()
 {
    for(int i = OrdersTotal() - 1; i >= 0; i--)
    {
       if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
-      if(OrderSymbol() != Symbol()) continue;
-      if(OrderMagicNumber() != MagicNumber) continue;
-
-      // 포지션만 (대기주문 제외)
+      if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
       if(OrderType() != OP_BUY && OrderType() != OP_SELL) continue;
 
-      double openPrice = OrderOpenPrice();
-      double currentSL = OrderStopLoss();
+      double sl = OrderStopLoss();
       double newSL;
 
       if(OrderType() == OP_BUY)
       {
-         double profit = Bid - openPrice;
-
-         // 트레일링 시작 조건
-         if(profit < TrailingStartPoints * Point) continue;
-
-         // 새 SL 계산: 현재가 - 트레일링스텝
-         newSL = NormalizeDouble(Bid - TrailingStepPoints * Point, Digits);
-
-         // 현재 SL보다 높아야 이동 (SL을 올리기만 함)
-         if(newSL > currentSL + Point)
-         {
-            if(OrderModify(OrderTicket(), openPrice, newSL, OrderTakeProfit(), 0, BullishColor))
-            {
-               Print("트레일링 SL 이동 (BUY #", OrderTicket(), "): ",
-                     DoubleToStr(currentSL, Digits), " → ", DoubleToStr(newSL, Digits));
-            }
-            else
-            {
-               Print("트레일링 수정 실패: 에러 ", GetLastError());
-            }
-         }
+         if(Bid - OrderOpenPrice() < TrailStartPts * Point) continue;
+         newSL = NormalizeDouble(Bid - TrailStepPts * Point, Digits);
+         if(newSL > sl + Point)
+            OrderModify(OrderTicket(), OrderOpenPrice(), newSL, OrderTakeProfit(), 0, BuyColor);
       }
-      else if(OrderType() == OP_SELL)
+      else
       {
-         double profit = openPrice - Ask;
-
-         if(profit < TrailingStartPoints * Point) continue;
-
-         // 새 SL 계산: 현재가 + 트레일링스텝
-         newSL = NormalizeDouble(Ask + TrailingStepPoints * Point, Digits);
-
-         // 현재 SL보다 낮아야 이동 (SL을 내리기만 함)
-         if(currentSL == 0 || newSL < currentSL - Point)
-         {
-            if(OrderModify(OrderTicket(), openPrice, newSL, OrderTakeProfit(), 0, BearishColor))
-            {
-               Print("트레일링 SL 이동 (SELL #", OrderTicket(), "): ",
-                     DoubleToStr(currentSL, Digits), " → ", DoubleToStr(newSL, Digits));
-            }
-            else
-            {
-               Print("트레일링 수정 실패: 에러 ", GetLastError());
-            }
-         }
+         if(OrderOpenPrice() - Ask < TrailStartPts * Point) continue;
+         newSL = NormalizeDouble(Ask + TrailStepPts * Point, Digits);
+         if(sl == 0 || newSL < sl - Point)
+            OrderModify(OrderTicket(), OrderOpenPrice(), newSL, OrderTakeProfit(), 0, SellColor);
       }
    }
 }
 
-//+------------------------------------------------------------------+
-//| 기존 주문 복원 (EA 재시작 시)                                     |
 //+------------------------------------------------------------------+
 void ScanExistingOrders()
 {
-   int restored = 0;
-
-   for(int i = OrdersTotal() - 1; i >= 0; i--)
-   {
-      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
-      if(OrderSymbol() != Symbol()) continue;
-      if(OrderMagicNumber() != MagicNumber) continue;
-
-      // 대기주문만 복원
-      if(OrderType() == OP_BUYLIMIT || OrderType() == OP_SELLLIMIT)
-      {
-         int size = ArraySize(g_levels);
-         ArrayResize(g_levels, size + 1);
-
-         g_levels[size].price      = OrderOpenPrice();
-         g_levels[size].barIndex   = 0;
-         g_levels[size].isBullish  = (OrderType() == OP_BUYLIMIT);
-         g_levels[size].active     = true;
-         g_levels[size].ticket     = OrderTicket();
-         g_levels[size].createTime = OrderOpenTime();
-
-         restored++;
-         Print("주문 복원: #", OrderTicket(), " @ ", DoubleToStr(OrderOpenPrice(), Digits),
-               OrderType() == OP_BUYLIMIT ? " (BUY LIMIT)" : " (SELL LIMIT)");
-      }
-   }
-
-   if(restored > 0)
-      Print("총 ", restored, "개 대기주문 복원 완료");
-}
-
-//+------------------------------------------------------------------+
-//| 거래 허용 확인                                                    |
-//+------------------------------------------------------------------+
-bool IsTradingAllowed()
-{
-   if(!IsTradeAllowed())
-   {
-      Print("거래 비허용 상태");
-      return false;
-   }
-   if(!IsConnected())
-   {
-      Print("서버 연결 안됨");
-      return false;
-   }
-   if(IsTradeContextBusy())
-   {
-      return false;
-   }
-   return true;
-}
-
-//+------------------------------------------------------------------+
-//| 거래시간 체크                                                     |
-//+------------------------------------------------------------------+
-bool IsWithinTradingHours()
-{
-   int hour = TimeHour(TimeCurrent());
-
-   if(TradingStartHour < TradingEndHour)
-      return (hour >= TradingStartHour && hour < TradingEndHour);
-   else // 야간 세션 (예: 22~6)
-      return (hour >= TradingStartHour || hour < TradingEndHour);
-}
-
-//+------------------------------------------------------------------+
-//| 금요일 마감 체크                                                  |
-//+------------------------------------------------------------------+
-bool IsFridayClose()
-{
-   return (TimeDayOfWeek(TimeCurrent()) == 5 &&
-           TimeHour(TimeCurrent()) >= FridayCloseHour);
-}
-
-//+------------------------------------------------------------------+
-//| 에러 설명                                                        |
-//+------------------------------------------------------------------+
-string ErrorDescription(int error)
-{
-   switch(error)
-   {
-      case 0:   return "No error";
-      case 1:   return "No error but result unknown";
-      case 2:   return "Common error";
-      case 3:   return "Invalid trade parameters";
-      case 4:   return "Trade server busy";
-      case 5:   return "Old version of client terminal";
-      case 6:   return "No connection with trade server";
-      case 7:   return "Not enough rights";
-      case 8:   return "Too frequent requests";
-      case 9:   return "Malfunctional trade operation";
-      case 64:  return "Account disabled";
-      case 65:  return "Invalid account";
-      case 128: return "Trade timeout";
-      case 129: return "Invalid price";
-      case 130: return "Invalid stops";
-      case 131: return "Invalid trade volume";
-      case 132: return "Market is closed";
-      case 133: return "Trade is disabled";
-      case 134: return "Not enough money";
-      case 135: return "Price changed";
-      case 136: return "Off quotes";
-      case 137: return "Broker is busy";
-      case 138: return "Requote";
-      case 139: return "Order is locked";
-      case 140: return "Buy orders only allowed";
-      case 141: return "Too many requests";
-      case 145: return "Modification denied (too close)";
-      case 146: return "Trade context is busy";
-      case 147: return "Expiration denied by broker";
-      case 148: return "Pending orders limit reached";
-      default:  return "Unknown error " + IntegerToString(error);
-   }
-}
-
-//+------------------------------------------------------------------+
-//| 상태 패널 그리기                                                  |
-//+------------------------------------------------------------------+
-void DrawPanel()
-{
-   // 통계 수집
-   g_totalBuyLimits = 0;
-   g_totalSellLimits = 0;
-   g_totalBuyTrades = 0;
-   g_totalSellTrades = 0;
-   g_sessionPL = 0;
-
    for(int i = OrdersTotal() - 1; i >= 0; i--)
    {
       if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
       if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
+      if(OrderType() > OP_SELL)
+      {
+         int sz = ArraySize(g_levels);
+         ArrayResize(g_levels, sz + 1);
+         g_levels[sz].price      = OrderOpenPrice();
+         g_levels[sz].barAge     = 0;
+         g_levels[sz].isBullish  = (OrderType() == OP_BUYSTOP);
+         g_levels[sz].active     = true;
+         g_levels[sz].ticket     = OrderTicket();
+         g_levels[sz].touchCount = 0;
+      }
+   }
+}
 
-      if(OrderType() == OP_BUYLIMIT) g_totalBuyLimits++;
-      else if(OrderType() == OP_SELLLIMIT) g_totalSellLimits++;
-      else if(OrderType() == OP_BUY) { g_totalBuyTrades++; g_sessionPL += OrderProfit() + OrderSwap() + OrderCommission(); }
-      else if(OrderType() == OP_SELL) { g_totalSellTrades++; g_sessionPL += OrderProfit() + OrderSwap() + OrderCommission(); }
+//+------------------------------------------------------------------+
+void DrawPanel()
+{
+   int bP=0,sP=0,bT=0,sT=0;
+   double pl=0;
+
+   for(int i = OrdersTotal()-1; i >= 0; i--)
+   {
+      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
+      if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
+      if(OrderType()==OP_BUYSTOP) bP++;
+      else if(OrderType()==OP_SELLSTOP) sP++;
+      else if(OrderType()==OP_BUY) { bT++; pl+=OrderProfit()+OrderSwap()+OrderCommission(); }
+      else if(OrderType()==OP_SELL) { sT++; pl+=OrderProfit()+OrderSwap()+OrderCommission(); }
    }
 
-   // 오늘 종료된 주문의 손익
-   double closedPL = 0;
-   for(int i = OrdersHistoryTotal() - 1; i >= 0; i--)
+   for(int i = OrdersHistoryTotal()-1; i >= 0; i--)
    {
       if(!OrderSelect(i, SELECT_BY_POS, MODE_HISTORY)) continue;
       if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
       if(OrderCloseTime() >= iTime(Symbol(), PERIOD_D1, 0))
-         closedPL += OrderProfit() + OrderSwap() + OrderCommission();
+         pl += OrderProfit()+OrderSwap()+OrderCommission();
    }
-   g_sessionPL += closedPL;
 
-   // 스프레드
-   double spread = MarketInfo(Symbol(), MODE_SPREAD) * Point / g_pointSize;
+   double sp = MarketInfo(Symbol(), MODE_SPREAD) * Point / g_pip;
 
-   // 패널 그리기
-   color plColor = g_sessionPL >= 0 ? clrLime : clrRed;
-
-   string line1 = "SMC Breakout EA v1.0 | " + Symbol() + " " + GetTimeframeName();
-   CreateLabel("SMCEA_P1", 10, 20, line1, clrYellow);
-
-   string line2 = "Pending: BuyLimit=" + IntegerToString(g_totalBuyLimits) +
-                   "  SellLimit=" + IntegerToString(g_totalSellLimits);
-   CreateLabel("SMCEA_P2", 10, 38, line2, clrWhite);
-
-   string line3 = "Trades: Buy=" + IntegerToString(g_totalBuyTrades) +
-                   "  Sell=" + IntegerToString(g_totalSellTrades) +
-                   "  P/L: " + DoubleToStr(g_sessionPL, 2);
-   CreateLabel("SMCEA_P3", 10, 56, line3, plColor);
-
-   string line4 = "Levels: Long=" + IntegerToString(CountActiveLevels(true)) +
-                   "  Short=" + IntegerToString(CountActiveLevels(false)) +
-                   "  | Spread: " + DoubleToStr(spread, 1) + " pip";
-   CreateLabel("SMCEA_P4", 10, 74, line4, clrGray);
-
-   string line5 = "SL=" + IntegerToString(StopLossPoints) + "pt  TP=" + IntegerToString(TakeProfitPoints) +
-                   "pt  Trail=" + (UseTrailing ? IntegerToString(TrailingStartPoints) + "/" + IntegerToString(TrailingStepPoints) + "pt" : "OFF");
-   CreateLabel("SMCEA_P5", 10, 92, line5, clrDarkGray);
+   MakeLabel("SMCEA_1", 10, 20,
+      "SMC v5 | " + Symbol() + " M" + IntegerToString(Period()), clrYellow);
+   MakeLabel("SMCEA_2", 10, 38,
+      "대기: BS=" + IntegerToString(bP) + " SS=" + IntegerToString(sP) +
+      "  포지션: B=" + IntegerToString(bT) + " S=" + IntegerToString(sT), clrWhite);
+   MakeLabel("SMCEA_3", 10, 56,
+      "P/L: " + DoubleToStr(pl, 2) + "  Spread: " + DoubleToStr(sp, 1) + "pip",
+      pl >= 0 ? clrLime : clrRed);
+   MakeLabel("SMCEA_4", 10, 74,
+      "저항=" + IntegerToString(CountActive(true)) +
+      " 지지=" + IntegerToString(CountActive(false)) +
+      "  SwH=" + IntegerToString(g_statSwH) +
+      " SwL=" + IntegerToString(g_statSwL) +
+      " 필터=" + IntegerToString(g_statFiltered), clrGray);
+   MakeLabel("SMCEA_5", 10, 92,
+      "생성=" + IntegerToString(g_statCreated) +
+      " 주문=" + IntegerToString(g_statOrders) +
+      " 체결=" + IntegerToString(g_statFilled) +
+      " 사용가격=" + IntegerToString(g_usedCount), clrDimGray);
 }
 
-//+------------------------------------------------------------------+
-//| 타임프레임 이름                                                   |
-//+------------------------------------------------------------------+
-string GetTimeframeName()
+void DrawLines()
 {
-   switch(Period())
+   for(int i = ObjectsTotal()-1; i >= 0; i--)
    {
-      case PERIOD_M1:  return "M1";
-      case PERIOD_M5:  return "M5";
-      case PERIOD_M15: return "M15";
-      case PERIOD_M30: return "M30";
-      case PERIOD_H1:  return "H1";
-      case PERIOD_H4:  return "H4";
-      case PERIOD_D1:  return "D1";
-      case PERIOD_W1:  return "W1";
-      case PERIOD_MN1: return "MN1";
-      default: return "TF" + IntegerToString(Period());
+      string nm = ObjectName(i);
+      if(StringFind(nm, "SMCEA_L") == 0) ObjectDelete(nm);
    }
-}
 
-//+------------------------------------------------------------------+
-//| 레벨 라인 그리기                                                  |
-//+------------------------------------------------------------------+
-void DrawLevelLines()
-{
    for(int i = 0; i < ArraySize(g_levels); i++)
    {
-      string baseName = "SMCEA_Lv_" + IntegerToString(i);
+      if(!g_levels[i].active) continue;
 
-      if(!g_levels[i].active)
-      {
-         ObjectDelete(baseName);
-         ObjectDelete(baseName + "_lbl");
-         continue;
-      }
+      string nm = "SMCEA_L" + IntegerToString(i);
+      color clr = g_levels[i].isBullish ? BuyColor : SellColor;
+      int sty = g_levels[i].ticket > 0 ? STYLE_SOLID : STYLE_DASH;
 
-      color lineColor = g_levels[i].isBullish ? BullishColor : BearishColor;
-      int lineStyle = g_levels[i].ticket > 0 ? STYLE_SOLID : STYLE_DASH;
+      ObjectCreate(nm, OBJ_HLINE, 0, 0, g_levels[i].price);
+      ObjectSet(nm, OBJPROP_COLOR, clr);
+      ObjectSet(nm, OBJPROP_STYLE, sty);
+      ObjectSet(nm, OBJPROP_WIDTH, 1);
+      ObjectSet(nm, OBJPROP_BACK, true);
 
-      // 수평선
-      if(ObjectFind(baseName) < 0)
-         ObjectCreate(baseName, OBJ_HLINE, 0, 0, g_levels[i].price);
-
-      ObjectSet(baseName, OBJPROP_PRICE1, g_levels[i].price);
-      ObjectSet(baseName, OBJPROP_COLOR, lineColor);
-      ObjectSet(baseName, OBJPROP_STYLE, lineStyle);
-      ObjectSet(baseName, OBJPROP_WIDTH, 1);
-      ObjectSet(baseName, OBJPROP_BACK, true);
-
-      // 라벨
-      string labelName = baseName + "_lbl";
-      string orderStatus = g_levels[i].ticket > 0 ? " [#" + IntegerToString(g_levels[i].ticket) + "]" : " [대기]";
-      string labelText = (g_levels[i].isBullish ? "BUY LMT " : "SELL LMT ") +
-                          DoubleToStr(g_levels[i].price, Digits) + orderStatus;
-
-      if(ObjectFind(labelName) < 0)
-         ObjectCreate(labelName, OBJ_TEXT, 0, Time[0], g_levels[i].price);
-
-      ObjectSetText(labelName, labelText, FontSize, "Arial Bold", lineColor);
-      ObjectSet(labelName, OBJPROP_TIME1, Time[0]);
-      ObjectSet(labelName, OBJPROP_PRICE1, g_levels[i].price);
+      string lb = nm + "_T";
+      string txt = (g_levels[i].isBullish ? "BS " : "SS ") +
+                    DoubleToStr(g_levels[i].price, Digits) +
+                    " [" + IntegerToString(g_levels[i].touchCount) + "T]" +
+                    (g_levels[i].ticket > 0 ? " #" + IntegerToString(g_levels[i].ticket) : "");
+      ObjectCreate(lb, OBJ_TEXT, 0, Time[10], g_levels[i].price);
+      ObjectSetText(lb, txt, FontSize-1, "Arial", clr);
    }
 }
 
-//+------------------------------------------------------------------+
-//| 라벨 생성 헬퍼                                                    |
-//+------------------------------------------------------------------+
-void CreateLabel(string name, int x, int y, string text, color clr)
+void MakeLabel(string name, int x, int y, string text, color clr)
 {
-   if(ObjectFind(name) < 0)
-      ObjectCreate(name, OBJ_LABEL, 0, 0, 0);
-
+   if(ObjectFind(name) < 0) ObjectCreate(name, OBJ_LABEL, 0, 0, 0);
    ObjectSet(name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSet(name, OBJPROP_XDISTANCE, x);
    ObjectSet(name, OBJPROP_YDISTANCE, y);
    ObjectSetText(name, text, FontSize, "Arial Bold", clr);
 }
 
-//+------------------------------------------------------------------+
-//| 오브젝트 전체 삭제                                                |
-//+------------------------------------------------------------------+
 void CleanupObjects()
 {
-   for(int i = ObjectsTotal() - 1; i >= 0; i--)
+   for(int i = ObjectsTotal()-1; i >= 0; i--)
    {
-      string name = ObjectName(i);
-      if(StringFind(name, "SMCEA_") >= 0)
-         ObjectDelete(name);
+      string nm = ObjectName(i);
+      if(StringFind(nm, "SMCEA_") >= 0) ObjectDelete(nm);
    }
 }
 //+------------------------------------------------------------------+

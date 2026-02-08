@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EA Gold Algo - Reverse Engineering Strategy Document</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0f; color: #e0e0e0; line-height: 1.6;
+            padding: 20px; max-width: 1200px; margin: 0 auto;
+        }
+        h1 {
+            color: #ffd700; font-size: 28px; text-align: center;
+            padding: 30px 0 10px; border-bottom: 2px solid #ffd700;
+            margin-bottom: 30px;
+        }
+        h1 small { display: block; font-size: 14px; color: #888; margin-top: 8px; font-weight: normal; }
+        h2 {
+            color: #00bcd4; font-size: 20px; margin: 30px 0 15px;
+            padding: 10px 15px; background: #111; border-left: 4px solid #00bcd4;
+        }
+        h3 { color: #4caf50; font-size: 16px; margin: 20px 0 10px; }
+
+        .section { background: #111; border-radius: 8px; padding: 20px; margin: 15px 0; }
+
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th { background: #1a1a2e; color: #ffd700; padding: 10px 12px; text-align: left; font-size: 13px; }
+        td { padding: 8px 12px; border-bottom: 1px solid #222; font-size: 13px; }
+        tr:hover { background: #1a1a1a; }
+
+        .confirmed { color: #4caf50; font-weight: bold; }
+        .estimated { color: #ff9800; font-weight: bold; }
+        .unknown { color: #f44336; font-weight: bold; }
+
+        .tag {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 11px; font-weight: bold; margin: 0 2px;
+        }
+        .tag-green { background: #1b5e20; color: #4caf50; }
+        .tag-orange { background: #e65100; color: #ff9800; }
+        .tag-red { background: #b71c1c; color: #f44336; }
+        .tag-blue { background: #0d47a1; color: #42a5f5; }
+
+        .flow-box {
+            background: #0d1117; border: 1px solid #333; border-radius: 8px;
+            padding: 20px; margin: 15px 0; font-family: 'Consolas', monospace;
+            font-size: 13px; line-height: 1.8; white-space: pre-wrap;
+        }
+        .flow-box .comment { color: #6a9955; }
+        .flow-box .keyword { color: #569cd6; }
+        .flow-box .value { color: #ce9178; }
+        .flow-box .highlight { color: #ffd700; font-weight: bold; }
+
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+        .stat-card {
+            background: #1a1a2e; border-radius: 8px; padding: 15px;
+            text-align: center; border: 1px solid #333;
+        }
+        .stat-card .number { font-size: 28px; font-weight: bold; color: #ffd700; }
+        .stat-card .label { font-size: 12px; color: #888; margin-top: 5px; }
+
+        .evidence {
+            background: #0d1117; border-left: 3px solid #4caf50;
+            padding: 10px 15px; margin: 10px 0; font-size: 12px; color: #aaa;
+        }
+        .evidence strong { color: #4caf50; }
+
+        .warning {
+            background: #1a1000; border-left: 3px solid #ff9800;
+            padding: 10px 15px; margin: 10px 0; font-size: 12px; color: #cca;
+        }
+        .warning strong { color: #ff9800; }
+
+        .state-diagram {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0;
+        }
+        .state-box {
+            border-radius: 8px; padding: 15px; text-align: center;
+            font-weight: bold; font-size: 14px;
+        }
+        .state-buy { background: #1b3a1b; border: 2px solid #4caf50; color: #4caf50; }
+        .state-sell { background: #3a1b1b; border: 2px solid #f44336; color: #f44336; }
+        .state-neutral { background: #2a2a1b; border: 2px solid #ff9800; color: #ff9800; }
+        .state-box small { display: block; font-size: 11px; font-weight: normal; color: #aaa; margin-top: 5px; }
+
+        .arrow { text-align: center; color: #666; font-size: 20px; padding: 5px; }
+
+        .param-table td:first-child { color: #42a5f5; font-weight: bold; white-space: nowrap; }
+        .param-table td:nth-child(2) { color: #ffd700; font-family: monospace; }
+        .param-table td:nth-child(3) { color: #888; font-size: 12px; }
+
+        hr { border: none; border-top: 1px solid #333; margin: 30px 0; }
+
+        .timeline { margin: 15px 0; }
+        .timeline-item {
+            display: flex; padding: 8px 0; border-left: 2px solid #333;
+            margin-left: 10px; padding-left: 15px;
+        }
+        .timeline-item .time { color: #42a5f5; font-family: monospace; font-size: 12px; min-width: 80px; }
+        .timeline-item .event { font-size: 13px; }
+        .timeline-item.buy { border-left-color: #4caf50; }
+        .timeline-item.sell { border-left-color: #f44336; }
+        .timeline-item.neutral { border-left-color: #ff9800; }
+    </style>
+</head>
+<body>
+
+<h1>
+    EA Gold Algo - Reverse Engineering
+    <small>CSV 352 trades + Real-time Panel Screenshots Analysis | 2026.02</small>
+</h1>
+
+<!-- ============================================================ -->
+<h2>1. Strategy Overview</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <p>Liquidity Breakout 기반 스캘핑 시스템. 최근 N봉의 Support/Resistance를 계산하고,
+    해당 레벨 돌파 시 Pending Stop 주문으로 진입. RSI를 방향 필터로 사용하며,
+    Trailing SL로 100% 마감하는 전략.</p>
+
+    <div class="stat-grid" style="margin-top: 20px;">
+        <div class="stat-card">
+            <div class="number">XAUUSD</div>
+            <div class="label">Trading Symbol (5-digit broker)</div>
+        </div>
+        <div class="stat-card">
+            <div class="number">M5</div>
+            <div class="label">Timeframe (5-minute)</div>
+        </div>
+        <div class="stat-card">
+            <div class="number">33s</div>
+            <div class="label">Avg Hold Time</div>
+        </div>
+        <div class="stat-card">
+            <div class="number">61%</div>
+            <div class="label">Win Rate (352 trades)</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>2. EA States (5 States)</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <div class="state-diagram">
+        <div class="state-box state-buy">
+            Breaking Upwards
+            <small>Price > Breakout Long<br>RSI Favourable (>50)<br>Buy Stop active</small>
+        </div>
+        <div class="state-box state-buy">
+            Trending Up
+            <small>Uptrend confirmed<br>RSI Favourable (>50)<br>Buy Stop active</small>
+        </div>
+        <div class="state-box state-sell">
+            Breaking Downwards
+            <small>Price < Breakout Short<br>RSI Favourable (<50)<br>Sell Stop active</small>
+        </div>
+        <div class="state-box state-sell">
+            Trending Down
+            <small>Downtrend confirmed<br>RSI Favourable (<50)<br>Sell Stop active</small>
+        </div>
+    </div>
+    <div class="state-box state-neutral" style="margin-top: 10px;">
+        Range Bound
+        <small>Price between Breakout Long and Breakout Short<br>No trading</small>
+    </div>
+
+    <div class="evidence">
+        <strong>Evidence (Real-time Screenshots):</strong><br>
+        10:56 RSI 61.6 → Range Bound (no trade) |
+        08:43 RSI 51.7 → Breaking Downwards + "Unfavourable RSI" (no trade) |
+        14:08 RSI 25.5 → Trending Down + "Favourable RSI" (trading active)
+    </div>
+
+    <h3>RSI Favourable / Unfavourable</h3>
+    <table>
+        <tr><th>State</th><th>RSI Condition</th><th>RSI Label</th><th>Trading</th></tr>
+        <tr><td>Buy (Breaking Up / Trending Up)</td><td>RSI > 50</td><td class="confirmed">Favourable</td><td class="confirmed">Active</td></tr>
+        <tr><td>Buy (Breaking Up / Trending Up)</td><td>RSI < 50</td><td class="unknown">Unfavourable</td><td class="unknown">Blocked</td></tr>
+        <tr><td>Sell (Breaking Down / Trending Down)</td><td>RSI < 50</td><td class="confirmed">Favourable</td><td class="confirmed">Active</td></tr>
+        <tr><td>Sell (Breaking Down / Trending Down)</td><td>RSI > 50</td><td class="unknown">Unfavourable</td><td class="unknown">Blocked</td></tr>
+        <tr><td>Range Bound</td><td>Any</td><td>-</td><td class="unknown">No Trade</td></tr>
+    </table>
+
+    <div class="evidence">
+        <strong>Evidence:</strong> Screenshot 08:43 - "Unfavourable RSI: 51.7" during Breaking Downwards state.
+        RSI > 50 while trying to Sell = Unfavourable = No entry.
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>3. Breakout Level Calculation</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <table class="param-table">
+        <tr><th>Parameter</th><th>Value</th><th>Confidence</th><th>Note</th></tr>
+        <tr>
+            <td>Breakout Long</td>
+            <td>Highest High of N bars</td>
+            <td><span class="tag tag-orange">Estimated</span></td>
+            <td>Resistance level, updated every bar</td>
+        </tr>
+        <tr>
+            <td>Breakout Short</td>
+            <td>Lowest Low of N bars</td>
+            <td><span class="tag tag-orange">Estimated</span></td>
+            <td>Support level, updated every bar</td>
+        </tr>
+        <tr>
+            <td>N (Lookback Period)</td>
+            <td>10 ~ 20 bars</td>
+            <td><span class="tag tag-orange">Estimated</span></td>
+            <td>To be optimized during backtesting</td>
+        </tr>
+        <tr>
+            <td>Update Frequency</td>
+            <td>Every new M5 bar</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>Panel values change each bar</td>
+        </tr>
+        <tr>
+            <td>Calculation Method</td>
+            <td>Simple High/Low (not multi-touch)</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>First touch triggers Stop order</td>
+        </tr>
+    </table>
+
+    <div class="evidence">
+        <strong>Evidence (Panel Data Changes):</strong><br>
+        17:44 B.Short 3330.46 → 17:47 B.Short 3329.07 ($1.39 change in 3min)<br>
+        15:23 B.Long 3338.24 → 15:26 B.Long 3341.18 ($2.94 change in 3min)<br>
+        Both updates coincide with new M5 bar opening.
+    </div>
+
+    <div class="warning">
+        <strong>To Be Determined:</strong> N value (lookback period).
+        Visual inspection suggests 10-20 bars. Will be implemented as user parameter
+        and optimized through backtesting.
+    </div>
+
+    <h3>3.2 N-bar Deep Analysis (Panel Data)</h3>
+    <table>
+        <tr><th>Time</th><th>B.Long</th><th>B.Short</th><th>Range (L-S)</th><th>Note</th></tr>
+        <tr><td>08:43</td><td>3343.13</td><td>3338.95</td><td style="color:#4caf50">$4.18</td><td>Low volatility</td></tr>
+        <tr><td>20:57</td><td>3325.26</td><td>3320.03</td><td style="color:#4caf50">$5.23</td><td>Low volatility</td></tr>
+        <tr><td>10:56</td><td>3332.15</td><td>3324.04</td><td>$8.11</td><td>Normal</td></tr>
+        <tr><td>14:08</td><td>3337.33</td><td>3326.66</td><td>$10.67</td><td>Normal</td></tr>
+        <tr><td>15:26</td><td>3341.18</td><td>3326.22</td><td>$14.96</td><td>After breakout</td></tr>
+        <tr><td>17:47</td><td>3342.54</td><td>3327.73</td><td>$14.81</td><td>Active trend</td></tr>
+        <tr><td>17:44</td><td>3349.08</td><td>3330.46</td><td style="color:#f44336">$18.62</td><td>High volatility</td></tr>
+        <tr><td>15:45</td><td>3360.68</td><td>3327.25</td><td style="color:#f44336">$33.43</td><td>Post-spike</td></tr>
+    </table>
+
+    <div class="evidence">
+        <strong>N-bar Analysis Conclusion:</strong><br>
+        - Range variation ($4.18 ~ $33.43) is due to market volatility, NOT dynamic N<br>
+        - Visual chart analysis: N ≈ 18 bars (user annotation confirmed)<br>
+        - Last Sell Stop referenced recent low → N is moderate (not large)<br>
+        - <strong style="color:#ffd700">Recommendation: Fixed N = 14 (default), optimize 10~20</strong><br>
+        - Dynamic N (ATR-based) can be added in v2 if fixed N underperforms
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>4. Entry Logic</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <h3>4.1 Entry Mechanism: Pending Stop Orders</h3>
+    <table class="param-table">
+        <tr><th>Parameter</th><th>Value</th><th>Confidence</th><th>Note</th></tr>
+        <tr>
+            <td>Buy Stop Price</td>
+            <td>Breakout Long + $1.00</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>Pending Gap = 100 points</td>
+        </tr>
+        <tr>
+            <td>Sell Stop Price</td>
+            <td>Breakout Short - $1.00</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>Pending Gap = 100 points</td>
+        </tr>
+        <tr>
+            <td>Order Lifetime</td>
+            <td>1 bar (5 minutes)</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>Cancelled and re-placed each new bar</td>
+        </tr>
+        <tr>
+            <td>Entries per Bar</td>
+            <td>Max 1</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>98.2% of entries in new bar (CSV data)</td>
+        </tr>
+    </table>
+
+    <div class="evidence">
+        <strong>Evidence (Real-time):</strong><br>
+        20:57 - B.Long: 3325.26, Buy Stop observed at 3326.19 → diff = $0.93 (approx $1.00)<br>
+        20:57 - Buy Stop observed at 3326.36 → diff = $1.10 (B.Long updated)<br>
+        21:24 - "#100 delete 3326.36" → Stop cancelled when state changed to Trending Down
+    </div>
+
+    <h3>4.2 Entry Flow (Per Bar)</h3>
+    <div class="flow-box"><span class="comment">// Every new M5 bar:</span>
+
+<span class="keyword">1.</span> Cancel previous pending Stop order (if exists)
+<span class="keyword">2.</span> Calculate new Breakout Long / Breakout Short
+<span class="keyword">3.</span> Calculate RSI(14)
+
+<span class="keyword">4.</span> <span class="keyword">IF</span> RSI > <span class="value">50</span> (Favourable for Buy):
+      <span class="highlight">Place Buy Stop</span> at Breakout Long + <span class="value">$1.00</span>
+      SL = Entry - <span class="value">$1.50</span> (150 points)
+
+<span class="keyword">5.</span> <span class="keyword">IF</span> RSI < <span class="value">50</span> (Favourable for Sell):
+      <span class="highlight">Place Sell Stop</span> at Breakout Short - <span class="value">$1.00</span>
+      SL = Entry + <span class="value">$1.50</span> (150 points)
+
+<span class="keyword">6.</span> <span class="keyword">IF</span> Price between Breakout Long and Short:
+      <span class="comment">// Range Bound - no orders placed</span>
+
+<span class="keyword">7.</span> Wait for price to hit Stop order or bar to close
+      <span class="keyword">IF</span> filled → Position opened, manage with trailing
+      <span class="keyword">IF</span> not filled → Repeat from step 1 on next bar</div>
+
+    <h3>4.3 Additional Entry (Re-entry) Logic</h3>
+    <p style="margin: 10px 0; color: #aaa;">
+        There is <strong style="color: #ffd700;">NO separate "additional entry" logic</strong>.
+        The same entry flow repeats every bar. Whether an additional entry occurs depends on:
+    </p>
+    <table>
+        <tr><th>Factor</th><th>Effect</th></tr>
+        <tr><td>Breakout Level updates each bar</td><td>Stop price changes, may or may not be reached</td></tr>
+        <tr><td>RSI turns Unfavourable</td><td>No Stop order placed = no entry</td></tr>
+        <tr><td>Price doesn't reach Stop level</td><td>Order expires, re-placed next bar</td></tr>
+        <tr><td>Price pushes further in trend direction</td><td>New Stop gets filled = looks like "additional entry"</td></tr>
+    </table>
+
+    <div class="evidence">
+        <strong>Evidence (CSV 352 trades):</strong><br>
+        - 98.2% of re-entries happen in a new 5min bar<br>
+        - 89% of re-entries at new High (Buy) or new Low (Sell)<br>
+        - 50% of re-entries delayed 3+ bars after prev position close<br>
+        - 92% of delayed re-entries: price moved with trend during wait = Breakout Level also moved up
+    </div>
+
+    <h3>4.4 Simultaneous Positions</h3>
+    <table>
+        <tr><th>Observation</th><th>Value</th></tr>
+        <tr><td>Single position at a time</td><td>94.7% (CSV)</td></tr>
+        <tr><td>Overlapping positions observed</td><td>5.3% (12 cases, avg overlap 45s)</td></tr>
+        <tr><td>2 positions closed simultaneously</td><td>Observed in real-time screenshot (15:23)</td></tr>
+    </table>
+    <div class="warning">
+        <strong>Implementation Note:</strong> Allow max 2 simultaneous positions as parameter.
+        Most entries happen after previous closes, but overlaps are possible.
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>5. Exit Logic</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <h3>5.1 Stop Loss (Hard SL)</h3>
+    <table class="param-table">
+        <tr><th>Parameter</th><th>Value</th><th>Confidence</th></tr>
+        <tr>
+            <td>Hard SL Distance</td>
+            <td>150 points ($1.50)</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+        </tr>
+        <tr>
+            <td>SL Direction</td>
+            <td>Buy: Entry - $1.50 / Sell: Entry + $1.50</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+        </tr>
+    </table>
+
+    <div class="evidence">
+        <strong>Evidence (CSV Quick Losers):</strong>
+        72 trades closed within 10s: avg SL distance $1.04~$2.00,
+        majority clustered at $1.50-2.00 range (including spread).
+    </div>
+
+    <h3>5.2 Trailing Stop</h3>
+    <table class="param-table">
+        <tr><th>Parameter</th><th>Value</th><th>Confidence</th><th>Note</th></tr>
+        <tr>
+            <td>Trailing Start</td>
+            <td>70 points ($0.70)</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>From EA settings panel</td>
+        </tr>
+        <tr>
+            <td>Trailing Step</td>
+            <td>5 points ($0.05)</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>From EA settings panel</td>
+        </tr>
+        <tr>
+            <td>Trailing Stop</td>
+            <td>63 points ($0.63)</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>From EA settings panel</td>
+        </tr>
+        <tr>
+            <td>Take Profit</td>
+            <td>0 (None)</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+            <td>Size TP: 0 Points in panel</td>
+        </tr>
+    </table>
+
+    <h3>5.3 Exit Statistics</h3>
+    <table>
+        <tr><th>Metric</th><th>Winners</th><th>Losers</th></tr>
+        <tr><td>Count</td><td>215 (61%)</td><td>137 (39%)</td></tr>
+        <tr><td>Avg Profit</td><td>+$2.56</td><td>-$2.40</td></tr>
+        <tr><td>Avg Hold Time</td><td>41s</td><td>28s</td></tr>
+        <tr><td>Exit Method</td><td colspan="2">100% by [sl] (trailing SL for winners, hard SL for losers)</td></tr>
+        <tr><td>Winners with SL past breakeven</td><td colspan="2">100% (trailing moves SL above entry)</td></tr>
+    </table>
+
+    <div class="evidence">
+        <strong>Evidence (CSV):</strong> All 352 trades have comment "[sl]".
+        68% of all trades had SL moved past entry price at close time.
+        Winners avg SL-to-close distance: $0.15 (nearly exact SL hit).
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>6. Session Filter</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <table class="param-table">
+        <tr><th>Session</th><th>Hours (UTC)</th><th>Status</th><th>Confidence</th></tr>
+        <tr>
+            <td>London</td>
+            <td>08:00 - 16:00</td>
+            <td class="confirmed">Enabled</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+        </tr>
+        <tr>
+            <td>New York</td>
+            <td>13:00 - 21:00</td>
+            <td class="confirmed">Enabled</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+        </tr>
+        <tr>
+            <td>Asian</td>
+            <td>00:00 - 08:00</td>
+            <td class="unknown">Disabled</td>
+            <td><span class="tag tag-green">Confirmed</span></td>
+        </tr>
+    </table>
+    <div class="evidence">
+        <strong>Evidence:</strong> From EA settings panel screenshots.
+        Trade distribution in CSV confirms activity during London/NY overlap.
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>7. Complete Algorithm Pseudocode</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <div class="flow-box"><span class="comment">// ========================================</span>
+<span class="comment">// EA Gold Algo - Reverse Engineered Logic</span>
+<span class="comment">// ========================================</span>
+
+<span class="comment">// PARAMETERS</span>
+<span class="keyword">input</span> N_bars          = <span class="value">14</span>;        <span class="comment">// Lookback period (10-20, optimize)</span>
+<span class="keyword">input</span> PendingGap      = <span class="value">100</span>;       <span class="comment">// Points ($1.00 for XAUUSD)</span>
+<span class="keyword">input</span> HardSL          = <span class="value">150</span>;       <span class="comment">// Points ($1.50)</span>
+<span class="keyword">input</span> TrailingStart   = <span class="value">70</span>;        <span class="comment">// Points ($0.70)</span>
+<span class="keyword">input</span> TrailingStep    = <span class="value">5</span>;         <span class="comment">// Points ($0.05)</span>
+<span class="keyword">input</span> TrailingStop    = <span class="value">63</span>;        <span class="comment">// Points ($0.63)</span>
+<span class="keyword">input</span> RSI_Period      = <span class="value">14</span>;
+<span class="keyword">input</span> RSI_Threshold   = <span class="value">50</span>;
+<span class="keyword">input</span> MaxPositions    = <span class="value">2</span>;         <span class="comment">// Max simultaneous positions</span>
+
+<span class="comment">// ---- ON EACH NEW M5 BAR ----</span>
+
+<span class="highlight">Step 1: Session Check</span>
+  <span class="keyword">IF</span> NOT (London_Session OR NewYork_Session):
+    Cancel all pending orders
+    <span class="keyword">RETURN</span>
+
+<span class="highlight">Step 2: Cancel Previous Pending Order</span>
+  Delete any existing Buy Stop / Sell Stop
+
+<span class="highlight">Step 3: Calculate Levels</span>
+  BreakoutLong  = Highest High of last N_bars
+  BreakoutShort = Lowest Low of last N_bars
+  RSI_value     = RSI(RSI_Period) on M5
+
+<span class="highlight">Step 4: Determine State</span>
+  <span class="keyword">IF</span> Close > BreakoutLong <span class="keyword">AND</span> RSI > RSI_Threshold:
+    State = <span class="value">"Breaking Upwards"</span> or <span class="value">"Trending Up"</span>
+  <span class="keyword">ELIF</span> Close < BreakoutShort <span class="keyword">AND</span> RSI < RSI_Threshold:
+    State = <span class="value">"Breaking Downwards"</span> or <span class="value">"Trending Down"</span>
+  <span class="keyword">ELIF</span> direction is Buy <span class="keyword">AND</span> RSI < RSI_Threshold:
+    State = <span class="value">"Unfavourable"</span> → No trade
+  <span class="keyword">ELIF</span> direction is Sell <span class="keyword">AND</span> RSI > RSI_Threshold:
+    State = <span class="value">"Unfavourable"</span> → No trade
+  <span class="keyword">ELSE</span>:
+    State = <span class="value">"Range Bound"</span> → No trade
+
+<span class="highlight">Step 5: Place Pending Order</span>
+  <span class="keyword">IF</span> State is Buy-side <span class="keyword">AND</span> OpenPositions < MaxPositions:
+    <span class="keyword">Place Buy Stop</span> at BreakoutLong + PendingGap * Point
+    SL = EntryPrice - HardSL * Point
+    TP = 0
+
+  <span class="keyword">IF</span> State is Sell-side <span class="keyword">AND</span> OpenPositions < MaxPositions:
+    <span class="keyword">Place Sell Stop</span> at BreakoutShort - PendingGap * Point
+    SL = EntryPrice + HardSL * Point
+    TP = 0
+
+<span class="highlight">Step 6: Manage Open Positions (Every Tick)</span>
+  <span class="keyword">FOR EACH</span> open position:
+    profit_points = current profit in points
+    <span class="keyword">IF</span> profit_points >= TrailingStart:
+      new_sl = current_price -/+ TrailingStop * Point
+      <span class="keyword">IF</span> new_sl is better than current SL by >= TrailingStep:
+        Modify SL to new_sl</div>
+</div>
+
+<!-- ============================================================ -->
+<h2>8. Win Rate by Streak Position</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <table>
+        <tr><th>Position in Streak</th><th>Trade Count</th><th>Win Rate</th><th>Avg P/L</th><th>Note</th></tr>
+        <tr><td>#1 (First entry)</td><td>125</td><td class="confirmed">66%</td><td>+$0.61</td><td>Breakout entry</td></tr>
+        <tr><td>#2</td><td>79</td><td class="confirmed">70%</td><td>+$1.53</td><td style="color: #ffd700;">Best performance</td></tr>
+        <tr><td>#3</td><td>39</td><td class="confirmed">74%</td><td>+$1.28</td><td style="color: #ffd700;">Highest win rate</td></tr>
+        <tr><td>#4</td><td>25</td><td>52%</td><td>-$0.51</td><td>Breakeven zone</td></tr>
+        <tr><td>#5+</td><td>84</td><td class="unknown">42%</td><td>-$0.25</td><td>Diminishing returns</td></tr>
+    </table>
+    <div class="warning">
+        <strong>Optimization Hint:</strong> Limiting to max 3 entries per streak direction
+        could improve overall profitability. Consider adding MaxEntriesPerStreak parameter.
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>9. Implementation Parameters</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <table class="param-table">
+        <tr><th>Parameter</th><th>Default</th><th>Range</th><th>Confidence</th></tr>
+        <tr><td>N_bars (Lookback)</td><td>14</td><td>10 ~ 20</td><td><span class="tag tag-orange">Optimize</span></td></tr>
+        <tr><td>PendingGap</td><td>100</td><td>50 ~ 150</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>HardSL</td><td>150</td><td>100 ~ 200</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>TrailingStart</td><td>70</td><td>50 ~ 100</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>TrailingStep</td><td>5</td><td>3 ~ 10</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>TrailingStop</td><td>63</td><td>50 ~ 80</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>RSI_Period</td><td>14</td><td>10 ~ 20</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>RSI_Threshold</td><td>50</td><td>45 ~ 55</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>MaxPositions</td><td>2</td><td>1 ~ 3</td><td><span class="tag tag-orange">Estimated</span></td></tr>
+        <tr><td>LotSize</td><td>0.67</td><td>User defined</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>London Session</td><td>08:00-16:00 UTC</td><td>-</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+        <tr><td>New York Session</td><td>13:00-21:00 UTC</td><td>-</td><td><span class="tag tag-green">Confirmed</span></td></tr>
+    </table>
+</div>
+
+<!-- ============================================================ -->
+<h2>10. Evidence Summary</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <h3>10.1 Data Sources</h3>
+    <table>
+        <tr><th>Source</th><th>Type</th><th>Content</th></tr>
+        <tr><td>2356509.history.csv</td><td>Trade History</td><td>742 trades (352 XAUUSD fills + 269 cancelled stops + DE40)</td></tr>
+        <tr><td>Panel Screenshots (real-time)</td><td>Visual</td><td>15+ screenshots with RSI, Breakout Long/Short, State</td></tr>
+        <tr><td>EA Settings Panel</td><td>Visual</td><td>Trailing, Pending Gap, Session settings</td></tr>
+    </table>
+
+    <h3>10.2 Confirmation Level</h3>
+    <table>
+        <tr><th>Item</th><th>Level</th><th>Evidence</th></tr>
+        <tr><td>Pending Stop entry mechanism</td><td><span class="tag tag-green">Confirmed</span></td><td>Real-time Buy Stop price matched B.Long + $1.00</td></tr>
+        <tr><td>RSI direction filter</td><td><span class="tag tag-green">Confirmed</span></td><td>"Unfavourable RSI" label observed when RSI contradicts direction</td></tr>
+        <tr><td>1 entry per bar</td><td><span class="tag tag-green">Confirmed</span></td><td>98.2% in CSV data</td></tr>
+        <tr><td>Trailing SL exit</td><td><span class="tag tag-green">Confirmed</span></td><td>100% trades closed as [sl], 68% SL moved past entry</td></tr>
+        <tr><td>No separate re-entry logic</td><td><span class="tag tag-green">Confirmed</span></td><td>Same Stop order mechanism each bar explains all patterns</td></tr>
+        <tr><td>N-bar lookback period</td><td><span class="tag tag-orange">Estimated</span></td><td>Visual: 10-20 bars, exact value needs optimization</td></tr>
+        <tr><td>Breaking vs Trending difference</td><td><span class="tag tag-orange">Estimated</span></td><td>Both states trade, naming may reflect recent breakout vs established trend</td></tr>
+    </table>
+</div>
+
+<!-- ============================================================ -->
+<h2>11. Real-time Panel Data Log</h2>
+<!-- ============================================================ -->
+<div class="section">
+    <table>
+        <tr><th>Date</th><th>Time</th><th>State</th><th>RSI</th><th>RSI Label</th><th>B.Long</th><th>B.Short</th></tr>
+        <tr><td>06/10</td><td>10:56</td><td>Range Bound</td><td>61.6</td><td>-</td><td>3332.15</td><td>3324.04</td></tr>
+        <tr><td>06/10</td><td>17:44</td><td>Breaking Downwards</td><td>40.0</td><td>Favourable</td><td>3349.08</td><td>3330.46</td></tr>
+        <tr><td>06/10</td><td>17:47</td><td>Trending Down</td><td>34.9</td><td>Favourable</td><td>3349.08</td><td>3329.07</td></tr>
+        <tr><td>06/10</td><td>19:12</td><td>Breaking Downwards</td><td>39.2</td><td>Favourable</td><td>3330.50</td><td>3323.31</td></tr>
+        <tr><td>06/10</td><td>20:57</td><td>Trending Up</td><td>53.1</td><td>Favourable</td><td>3325.26</td><td>3320.03</td></tr>
+        <tr><td>06/10</td><td>21:24</td><td>Trending Down</td><td>42.9</td><td>Favourable</td><td>3325.79</td><td>3320.38</td></tr>
+        <tr><td>06/11</td><td>08:04</td><td>Trending Up</td><td>58.7</td><td>Favourable</td><td>3342.92</td><td>3336.88</td></tr>
+        <tr><td>06/11</td><td>08:43</td><td>Breaking Downwards</td><td>51.7</td><td style="color:#f44336">Unfavourable</td><td>3343.13</td><td>3338.95</td></tr>
+        <tr><td>06/11</td><td>09:29</td><td>Breaking Downwards</td><td>41.3</td><td>Favourable</td><td>3342.82</td><td>3335.52</td></tr>
+        <tr><td>06/11</td><td>10:30</td><td>Trending Up</td><td>53.2</td><td>Favourable</td><td>3340.53</td><td>3332.52</td></tr>
+        <tr><td>06/11</td><td>10:50</td><td>Breaking Upwards</td><td>60.0</td><td>Favourable</td><td>3342.35</td><td>3333.29</td></tr>
+        <tr><td>06/11</td><td>14:08</td><td>Trending Down</td><td>25.5</td><td>Favourable</td><td>3337.33</td><td>3326.66</td></tr>
+        <tr><td>06/11</td><td>15:23</td><td>Breaking Upwards</td><td>61.5</td><td>Favourable</td><td>3338.24</td><td>3326.22</td></tr>
+        <tr><td>06/11</td><td>15:26</td><td>Breaking Upwards</td><td>66.1</td><td>Favourable</td><td>3341.18</td><td>3326.22</td></tr>
+        <tr><td>06/11</td><td>15:45</td><td>Trending Up</td><td>74.0</td><td>Favourable</td><td>3360.68</td><td>3327.25</td></tr>
+        <tr><td>06/11</td><td>17:47</td><td>Trending Up</td><td>57.5</td><td>Favourable</td><td>3342.54</td><td>3327.73</td></tr>
+    </table>
+</div>
+
+<hr>
+<p style="text-align: center; color: #555; font-size: 12px;">
+    EA Gold Algo Reverse Engineering Document | Generated 2026.02 |
+    Based on CSV 352 trades + 15+ real-time panel screenshots
+</p>
+
+</body>
+</html>

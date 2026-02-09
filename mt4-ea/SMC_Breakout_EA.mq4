@@ -29,7 +29,8 @@ input int       TrailStartPts       = 50;
 input int       TrailStepPts        = 50;
 
 //=== 필터 ===
-input double    MaxSpreadPips       = 30.0;
+input double    MaxSpreadPips       = 15.0;
+input int       MaxSlippage         = 5;        // Max slippage (points)
 input bool      UseTradingHours     = false;
 input int       StartHour           = 8;
 input int       EndHour             = 22;
@@ -403,7 +404,7 @@ void SyncOrders()
          sl = NormalizeDouble(px - StopLossPoints * Point, Digits);
          tp = NormalizeDouble(px + TakeProfitPoints * Point, Digits);
 
-         int tk = OrderSend(Symbol(), OP_BUYSTOP, LotSize, px, 0, sl, tp,
+         int tk = OrderSend(Symbol(), OP_BUYSTOP, LotSize, px, MaxSlippage, sl, tp,
                             "SMCEA", MagicNumber, 0, BuyColor);
          if(tk > 0)
          {
@@ -421,7 +422,7 @@ void SyncOrders()
          sl = NormalizeDouble(px + StopLossPoints * Point, Digits);
          tp = NormalizeDouble(px - TakeProfitPoints * Point, Digits);
 
-         int tk = OrderSend(Symbol(), OP_SELLSTOP, LotSize, px, 0, sl, tp,
+         int tk = OrderSend(Symbol(), OP_SELLSTOP, LotSize, px, MaxSlippage, sl, tp,
                             "SMCEA", MagicNumber, 0, SellColor);
          if(tk > 0)
          {

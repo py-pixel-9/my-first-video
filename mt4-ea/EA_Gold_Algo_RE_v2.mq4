@@ -1,54 +1,79 @@
 //+------------------------------------------------------------------+
-//|                                              EA_Gold_Algo_RE.mq4 |
-//|         EA Gold Algo Reverse Engineering v1.0                     |
-//|         Liquidity Breakout + RSI Filter + Trailing SL            |
+//|                                           EA_Gold_Algo_RE_v2.mq4 |
+//|         EA Gold Algo Reverse Engineering v2.0                     |
+//|         + Auto Risk% Lot                                          |
+//|         + Negative Gap → Market Entry                             |
+//|         + Breakeven Option                                        |
+//|         + Slippage Control                                        |
 //+------------------------------------------------------------------+
 #property copyright "Reverse Engineering Project 2026"
 #property link      ""
-#property version   "1.00"
+#property version   "2.00"
 #property strict
 
-//=== Breakout Level ===
-input int       N_Bars             = 14;       // Lookback period (10~20, optimize)
-input int       PendingGapPts      = 100;      // Pending order gap (100pt = $1.00)
+//=== Trade Settings ===
+input string    NoteTradeSet       = "==================Trade Settings";
+input int       MagicNumber        = 1;
+input double    LotSize            = 0.01;      // Lot Size (used when AutoRisk=false)
+input bool      UseAutoRisk        = true;      // use Automatic Risk
+input double    RiskPercent        = 1.0;       // Risk % (Recommend 1%)
+input int       MaxSpreadPts       = 60;        // Max Spread (in Points)
+input int       MaxSlippage        = 40;        // Max slippage (points)
+
+//=== Session Filter ===
+input string    NoteSession        = "==================Session";
+input bool      UseSessionFilter   = true;      // Use Session Filters (UTC-based universal)
+input bool      TradeAsian         = false;     // Trade Asian Session (UTC)
+input int       AsiaStart          = 0;         // Asia Start Hour (UTC)
+input int       AsiaEnd            = 8;         // Asia End Hour (UTC)
+input bool      TradeLondon        = true;      // Trade London Session (UTC)
+input int       LondonStart        = 8;         // London Start Hour (UTC)
+input int       LondonEnd          = 16;        // London End Hour (UTC)
+input bool      TradeNewYork       = true;      // Trade New York Session (UTC)
+input int       NYStart            = 13;        // New York Start Hour (UTC)
+input int       NYEnd              = 21;        // New York End Hour (UTC)
 
 //=== Stop Loss ===
-input int       HardSL_Pts         = 150;      // Hard SL (150pt = $1.50)
+input int       HardSL_Pts         = 150;       // Hard Stop Loss (Points)
+
+//=== Breakeven ===
+input string    NoteBE             = "==================Breakeven";
+input bool      EnableBreakeven    = false;     // Enable Breakeven
+input int       BreakevenPts       = 40;        // Breakeven (Points)
 
 //=== Trailing Stop ===
-input int       TrailStartPts      = 70;       // Trailing start (70pt = $0.70)
-input int       TrailStepPts       = 5;        // Trailing step (5pt = $0.05)
-input int       TrailStopPts       = 63;       // Trailing distance (63pt = $0.63)
+input string    NoteTrail          = "==================Trailing";
+input bool      EnableTrailing     = true;      // Enable SL Trailing
+input int       TrailStartPts      = 70;        // Trailing Start (Points)
+input int       TrailStopPts       = 63;        // Trailing Stop (Points)
+input int       TrailStepPts       = 5;         // Trailing Step (Points)
+
+//=== Pending Orders ===
+input string    NotePending        = "====== Pending Orders Settings ======";
+input bool      ActivatePending    = true;      // Activate Pending Orders
+input int       PendingGapPts      = 100;       // Enable Breakout Pending Gap (Points)
+input int       NegGapPts          = 100;       // Disable Negative Pending Gap(Points)
+
+//=== Breakout Level ===
+input int       N_Bars             = 14;        // Lookback period (10~20, optimize)
 
 //=== RSI Filter ===
-input int       RSI_Period         = 14;       // RSI period
-input int       RSI_Threshold      = 50;       // RSI threshold (50 = neutral)
+input int       RSI_Period         = 14;        // RSI period
+input int       RSI_Threshold      = 50;        // RSI threshold (50 = neutral)
 
 //=== Position Management ===
-input int       MaxPositions       = 2;        // Max simultaneous positions
-input double    LotSize            = 0.67;     // Lot size
+input int       MaxPositions       = 2;         // Max simultaneous positions
 
-//=== Session Filter (UTC hours) ===
-input bool      UseLondon          = true;     // London session
-input int       LondonStart        = 8;        // London start (UTC)
-input int       LondonEnd          = 16;       // London end (UTC)
-input bool      UseNewYork         = true;     // New York session
-input int       NYStart            = 13;       // NY start (UTC)
-input int       NYEnd              = 21;       // NY end (UTC)
-
-//=== Misc ===
-input int       MagicNumber        = 20260211; // Magic number
-input double    MaxSpreadPts       = 15;       // Max spread (points)
-input int       MaxSlippage        = 5;        // Max slippage (points)
-input bool      ShowPanel          = true;     // Show info panel
-input int       FontSize           = 9;        // Panel font size
+//=== Display ===
+input bool      ShowPanel          = true;      // Show Panel
+input int       FontSize           = 9;         // Panel font size
 
 //+------------------------------------------------------------------+
 // Global variables
 //+------------------------------------------------------------------+
 datetime   g_lastBarTime      = 0;
-int        g_pendingTicket    = -1;          // Current pending order ticket
-int        g_lastPendingType  = -1;          // Last pending type (OP_BUYSTOP/SELLSTOP)
+int        g_pendingTicket    = -1;
+int        g_lastPendingType  = -1;
 
 // State tracking
 string     g_currentState     = "Initializing";
@@ -56,6 +81,7 @@ double     g_breakoutLong     = 0;
 double     g_breakoutShort    = 0;
 double     g_currentRSI       = 0;
 string     g_rsiLabel         = "";
+double     g_calcLot          = 0;
 
 // Statistics
 int        g_totalEntries     = 0;
@@ -67,27 +93,24 @@ double     g_totalPL          = 0;
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   // Validate parameters
-   if(LotSize <= 0)
-   {
-      Alert("EA Gold Algo RE: LotSize must be > 0");
-      return(INIT_PARAMETERS_INCORRECT);
-   }
    if(N_Bars < 3)
    {
-      Alert("EA Gold Algo RE: N_Bars must be >= 3");
+      Alert("EA Gold Algo RE v2: N_Bars must be >= 3");
       return(INIT_PARAMETERS_INCORRECT);
    }
 
-   // Scan for any existing pending/positions from previous session
+   // Calculate initial lot
+   g_calcLot = CalculateLot();
+
    ScanExistingOrders();
 
-   Print("=== EA Gold Algo RE v1.0 Initialized ===");
-   Print("N_Bars=", N_Bars, " PendingGap=", PendingGapPts,
-         " HardSL=", HardSL_Pts, " TrailStart=", TrailStartPts,
-         " TrailStep=", TrailStepPts, " TrailStop=", TrailStopPts);
-   Print("RSI=", RSI_Period, " Threshold=", RSI_Threshold,
-         " MaxPos=", MaxPositions, " Lot=", DoubleToStr(LotSize, 2));
+   Print("=== EA Gold Algo RE v2.0 Initialized ===");
+   Print("AutoRisk=", UseAutoRisk, " Risk%=", RiskPercent, " Lot=", DoubleToStr(g_calcLot, 2));
+   Print("N_Bars=", N_Bars, " PendingGap=", PendingGapPts, " NegGap=", NegGapPts,
+         " HardSL=", HardSL_Pts);
+   Print("Trailing: Start=", TrailStartPts, " Stop=", TrailStopPts, " Step=", TrailStepPts);
+   Print("BE: Enabled=", EnableBreakeven, " Pts=", BreakevenPts);
+   Print("Slippage=", MaxSlippage, " MaxSpread=", MaxSpreadPts);
 
    return(INIT_SUCCEEDED);
 }
@@ -101,7 +124,7 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   //--- New bar logic (runs once per M5 bar)
+   //--- New bar logic
    bool newBar = (g_lastBarTime != Time[0]);
    if(newBar)
    {
@@ -117,66 +140,100 @@ void OnTick()
          DetermineStateAndTrade();
    }
 
-   //--- Trailing stop (runs every tick)
-   ManageTrailingStop();
+   //--- Trailing stop (every tick)
+   if(EnableTrailing)
+      ManageTrailingStop();
 
-   //--- Check if pending orders got filled
+   //--- Breakeven (every tick)
+   if(EnableBreakeven)
+      ManageBreakeven();
+
+   //--- Check pending fill
    CheckPendingFill();
 
-   //--- Update panel
+   //--- Panel
    if(ShowPanel) DrawPanel();
 }
 
 //+------------------------------------------------------------------+
-//| Main logic: runs on every new M5 bar                             |
+//| Calculate Lot based on Risk% and Hard SL                         |
+//+------------------------------------------------------------------+
+double CalculateLot()
+{
+   if(!UseAutoRisk)
+      return LotSize;
+
+   double riskMoney  = AccountBalance() * (RiskPercent / 100.0);
+   double tickValue  = MarketInfo(Symbol(), MODE_TICKVALUE);
+   double tickSize   = MarketInfo(Symbol(), MODE_TICKSIZE);
+
+   if(tickValue <= 0 || tickSize <= 0 || HardSL_Pts <= 0)
+      return LotSize;
+
+   // SL in price = HardSL_Pts * Point
+   // SL ticks = SL in price / tickSize
+   // Risk per lot = SL ticks * tickValue
+   double slPrice    = HardSL_Pts * Point;
+   double slTicks    = slPrice / tickSize;
+   double riskPerLot = slTicks * tickValue;
+
+   if(riskPerLot <= 0)
+      return LotSize;
+
+   double lot = riskMoney / riskPerLot;
+
+   // Normalize to lot step
+   double lotStep = MarketInfo(Symbol(), MODE_LOTSTEP);
+   double minLot  = MarketInfo(Symbol(), MODE_MINLOT);
+   double maxLot  = MarketInfo(Symbol(), MODE_MAXLOT);
+
+   if(lotStep > 0)
+      lot = MathFloor(lot / lotStep) * lotStep;
+
+   lot = MathMax(lot, minLot);
+   lot = MathMin(lot, maxLot);
+
+   return NormalizeDouble(lot, 2);
+}
+
 //+------------------------------------------------------------------+
 void OnNewBar()
 {
-   //--- Step 1: Session check
+   //--- Session check
    if(!IsSessionActive())
    {
       CancelPendingOrder();
       g_currentState = "Off Session";
-      Print("[DEBUG] Off Session - Hour=", TimeHour(TimeCurrent()));
       return;
    }
 
-   //--- Step 2: Spread check
+   //--- Spread check
    double currentSpread = MarketInfo(Symbol(), MODE_SPREAD);
    if(currentSpread > MaxSpreadPts)
    {
       g_currentState = "High Spread";
-      Print("[DEBUG] High Spread - Spread=", currentSpread, " MaxSpread=", MaxSpreadPts);
       return;
    }
 
-   //--- Step 3: Cancel previous pending order
+   //--- Cancel previous pending
    CancelPendingOrder();
 
-   //--- Step 4: Calculate Breakout Levels
+   //--- Calculate Breakout Levels
    CalculateBreakoutLevels();
 
-   //--- Step 5: Calculate RSI
+   //--- Calculate RSI
    g_currentRSI = iRSI(Symbol(), PERIOD_M5, RSI_Period, PRICE_CLOSE, 1);
 
-   //--- Step 6: Determine state and place order
-   Print("[DEBUG] NewBar - Spread=", currentSpread,
-         " B.Long=", DoubleToStr(g_breakoutLong, Digits),
-         " B.Short=", DoubleToStr(g_breakoutShort, Digits),
-         " Ask=", DoubleToStr(Ask, Digits),
-         " Bid=", DoubleToStr(Bid, Digits),
-         " RSI=", DoubleToStr(g_currentRSI, 1),
-         " Point=", DoubleToStr(Point, 5),
-         " Digits=", Digits);
+   //--- Recalculate lot each bar
+   g_calcLot = CalculateLot();
+
+   //--- Place order
    DetermineStateAndTrade();
 }
 
 //+------------------------------------------------------------------+
-//| Calculate Breakout Long (Highest High) and Short (Lowest Low)    |
-//+------------------------------------------------------------------+
 void CalculateBreakoutLevels()
 {
-   // Use bar index 1 to N_Bars (exclude current unfinished bar 0)
    double highestHigh = High[1];
    double lowestLow   = Low[1];
 
@@ -192,36 +249,48 @@ void CalculateBreakoutLevels()
 }
 
 //+------------------------------------------------------------------+
-//| Determine EA state and place appropriate pending order           |
+//| Determine state and trade - with Negative Gap handling           |
 //+------------------------------------------------------------------+
 void DetermineStateAndTrade()
 {
-   //--- Check position count
    int openPos = CountOpenPositions();
 
-   //--- Determine direction based on current price vs breakout levels
    bool priceAboveLong  = (Ask > g_breakoutLong);
    bool priceBelowShort = (Bid < g_breakoutShort);
 
-   Print("[DEBUG] State - Ask=", DoubleToStr(Ask, Digits),
-         " Bid=", DoubleToStr(Bid, Digits),
-         " AboveLong=", priceAboveLong,
-         " BelowShort=", priceBelowShort,
-         " RSI=", DoubleToStr(g_currentRSI, 1),
-         " OpenPos=", openPos, "/", MaxPositions);
-
-   //--- Buy side logic
+   //--- Buy side
    if(priceAboveLong)
    {
       if(g_currentRSI > RSI_Threshold)
       {
-         // Favourable RSI for Buy
          g_rsiLabel = "Favourable";
          g_currentState = "Breaking Upwards";
 
          if(openPos < MaxPositions)
          {
-            PlaceBuyStop();
+            double pendingEntry = NormalizeDouble(g_breakoutLong + PendingGapPts * Point, Digits);
+
+            // Negative Gap: Ask already past the pending entry price
+            if(Ask >= pendingEntry)
+            {
+               // Check if Ask is too far above breakout (beyond NegGap limit)
+               double negLimit = NormalizeDouble(g_breakoutLong + (PendingGapPts + NegGapPts) * Point, Digits);
+               if(Ask <= negLimit)
+               {
+                  // Market entry - price already at/past pending level
+                  PlaceMarketBuy();
+               }
+               else
+               {
+                  g_currentState = "Breaking Up (Too Far)";
+               }
+            }
+            else
+            {
+               // Normal: place Buy Stop
+               if(ActivatePending)
+                  PlaceBuyStop();
+            }
          }
          else
          {
@@ -230,23 +299,40 @@ void DetermineStateAndTrade()
       }
       else
       {
-         // Unfavourable RSI for Buy
          g_rsiLabel = "Unfavourable";
          g_currentState = "Breaking Up (Unfav RSI)";
       }
    }
-   //--- Sell side logic
+   //--- Sell side
    else if(priceBelowShort)
    {
       if(g_currentRSI < RSI_Threshold)
       {
-         // Favourable RSI for Sell
          g_rsiLabel = "Favourable";
          g_currentState = "Breaking Downwards";
 
          if(openPos < MaxPositions)
          {
-            PlaceSellStop();
+            double pendingEntry = NormalizeDouble(g_breakoutShort - PendingGapPts * Point, Digits);
+
+            // Negative Gap: Bid already past the pending entry price
+            if(Bid <= pendingEntry)
+            {
+               double negLimit = NormalizeDouble(g_breakoutShort - (PendingGapPts + NegGapPts) * Point, Digits);
+               if(Bid >= negLimit)
+               {
+                  PlaceMarketSell();
+               }
+               else
+               {
+                  g_currentState = "Breaking Down (Too Far)";
+               }
+            }
+            else
+            {
+               if(ActivatePending)
+                  PlaceSellStop();
+            }
          }
          else
          {
@@ -255,12 +341,11 @@ void DetermineStateAndTrade()
       }
       else
       {
-         // Unfavourable RSI for Sell
          g_rsiLabel = "Unfavourable";
          g_currentState = "Breaking Down (Unfav RSI)";
       }
    }
-   //--- Range bound: price between breakout levels
+   //--- Range bound
    else
    {
       g_rsiLabel = "-";
@@ -269,42 +354,77 @@ void DetermineStateAndTrade()
 }
 
 //+------------------------------------------------------------------+
-//| Place Buy Stop order at Breakout Long + PendingGap               |
+//| Market Buy - for Negative Gap situations                         |
+//+------------------------------------------------------------------+
+void PlaceMarketBuy()
+{
+   if(!IsTradeAllowed() || IsTradeContextBusy()) return;
+
+   double sl = NormalizeDouble(Ask - HardSL_Pts * Point, Digits);
+
+   int ticket = OrderSend(Symbol(), OP_BUY, g_calcLot, Ask, MaxSlippage,
+                           sl, 0, "EGAR_MKT", MagicNumber, 0, clrDodgerBlue);
+
+   if(ticket > 0)
+   {
+      g_totalEntries++;
+      Print(">> MarketBUY #", ticket, " @ ", DoubleToStr(Ask, Digits),
+            " SL=", DoubleToStr(sl, Digits),
+            " Lot=", DoubleToStr(g_calcLot, 2),
+            " RSI=", DoubleToStr(g_currentRSI, 1));
+   }
+   else
+   {
+      Print("!! MarketBUY FAILED: err=", GetLastError());
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Market Sell - for Negative Gap situations                        |
+//+------------------------------------------------------------------+
+void PlaceMarketSell()
+{
+   if(!IsTradeAllowed() || IsTradeContextBusy()) return;
+
+   double sl = NormalizeDouble(Bid + HardSL_Pts * Point, Digits);
+
+   int ticket = OrderSend(Symbol(), OP_SELL, g_calcLot, Bid, MaxSlippage,
+                           sl, 0, "EGAR_MKT", MagicNumber, 0, clrOrangeRed);
+
+   if(ticket > 0)
+   {
+      g_totalEntries++;
+      Print(">> MarketSELL #", ticket, " @ ", DoubleToStr(Bid, Digits),
+            " SL=", DoubleToStr(sl, Digits),
+            " Lot=", DoubleToStr(g_calcLot, 2),
+            " RSI=", DoubleToStr(g_currentRSI, 1));
+   }
+   else
+   {
+      Print("!! MarketSELL FAILED: err=", GetLastError());
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Place Buy Stop                                                   |
 //+------------------------------------------------------------------+
 void PlaceBuyStop()
 {
-   if(!IsTradeAllowed() || IsTradeContextBusy())
-   {
-      Print("[DEBUG] BuyStop SKIP - TradeAllowed=", IsTradeAllowed(), " ContextBusy=", IsTradeContextBusy());
-      return;
-   }
+   if(!IsTradeAllowed() || IsTradeContextBusy()) return;
 
    double entryPrice = NormalizeDouble(g_breakoutLong + PendingGapPts * Point, Digits);
 
-   // Ensure entry price is above current Ask + stop level
    double minStopLevel = MarketInfo(Symbol(), MODE_STOPLEVEL) * Point;
-   double stopLevelRaw = MarketInfo(Symbol(), MODE_STOPLEVEL);
-
-   Print("[DEBUG] BuyStop CHECK - Entry=", DoubleToStr(entryPrice, Digits),
-         " Ask=", DoubleToStr(Ask, Digits),
-         " Ask+MinStop=", DoubleToStr(Ask + minStopLevel, Digits),
-         " MinStopLevel=", DoubleToStr(minStopLevel, Digits),
-         " StopLevelRaw=", stopLevelRaw,
-         " PendingGap=", PendingGapPts, " Point=", DoubleToStr(Point, 5),
-         " GapValue=", DoubleToStr(PendingGapPts * Point, Digits));
-
    if(entryPrice <= Ask + minStopLevel)
    {
-      Print("[DEBUG] BuyStop SKIP - Entry(", DoubleToStr(entryPrice, Digits),
-            ") <= Ask+MinStop(", DoubleToStr(Ask + minStopLevel, Digits), ")");
-      return;
+      // Adjust entry to minimum valid level
+      entryPrice = NormalizeDouble(Ask + minStopLevel + Point, Digits);
    }
 
    double sl = NormalizeDouble(entryPrice - HardSL_Pts * Point, Digits);
 
-   int ticket = OrderSend(Symbol(), OP_BUYSTOP, LotSize, entryPrice, MaxSlippage,
-                           sl, 0,  // TP = 0 (trailing only)
-                           "EGAR", MagicNumber, 0, clrDodgerBlue);
+   int ticket = OrderSend(Symbol(), OP_BUYSTOP, g_calcLot, entryPrice, MaxSlippage,
+                           sl, 0, "EGAR", MagicNumber, 0, clrDodgerBlue);
 
    if(ticket > 0)
    {
@@ -312,55 +432,35 @@ void PlaceBuyStop()
       g_lastPendingType = OP_BUYSTOP;
       Print(">> BuyStop #", ticket, " @ ", DoubleToStr(entryPrice, Digits),
             " SL=", DoubleToStr(sl, Digits),
-            " B.Long=", DoubleToStr(g_breakoutLong, Digits),
-            " RSI=", DoubleToStr(g_currentRSI, 1));
+            " Lot=", DoubleToStr(g_calcLot, 2));
    }
    else
    {
-      int err = GetLastError();
-      Print("!! BuyStop FAILED: err=", err, " price=", DoubleToStr(entryPrice, Digits),
-            " Ask=", DoubleToStr(Ask, Digits),
-            " minStop=", DoubleToStr(minStopLevel, Digits));
+      Print("!! BuyStop FAILED: err=", GetLastError(),
+            " price=", DoubleToStr(entryPrice, Digits),
+            " Ask=", DoubleToStr(Ask, Digits));
    }
 }
 
 //+------------------------------------------------------------------+
-//| Place Sell Stop order at Breakout Short - PendingGap             |
+//| Place Sell Stop                                                  |
 //+------------------------------------------------------------------+
 void PlaceSellStop()
 {
-   if(!IsTradeAllowed() || IsTradeContextBusy())
-   {
-      Print("[DEBUG] SellStop SKIP - TradeAllowed=", IsTradeAllowed(), " ContextBusy=", IsTradeContextBusy());
-      return;
-   }
+   if(!IsTradeAllowed() || IsTradeContextBusy()) return;
 
    double entryPrice = NormalizeDouble(g_breakoutShort - PendingGapPts * Point, Digits);
 
-   // Ensure entry price is below current Bid - stop level
    double minStopLevel = MarketInfo(Symbol(), MODE_STOPLEVEL) * Point;
-   double stopLevelRaw = MarketInfo(Symbol(), MODE_STOPLEVEL);
-
-   Print("[DEBUG] SellStop CHECK - Entry=", DoubleToStr(entryPrice, Digits),
-         " Bid=", DoubleToStr(Bid, Digits),
-         " Bid-MinStop=", DoubleToStr(Bid - minStopLevel, Digits),
-         " MinStopLevel=", DoubleToStr(minStopLevel, Digits),
-         " StopLevelRaw=", stopLevelRaw,
-         " PendingGap=", PendingGapPts, " Point=", DoubleToStr(Point, 5),
-         " GapValue=", DoubleToStr(PendingGapPts * Point, Digits));
-
    if(entryPrice >= Bid - minStopLevel)
    {
-      Print("[DEBUG] SellStop SKIP - Entry(", DoubleToStr(entryPrice, Digits),
-            ") >= Bid-MinStop(", DoubleToStr(Bid - minStopLevel, Digits), ")");
-      return;
+      entryPrice = NormalizeDouble(Bid - minStopLevel - Point, Digits);
    }
 
    double sl = NormalizeDouble(entryPrice + HardSL_Pts * Point, Digits);
 
-   int ticket = OrderSend(Symbol(), OP_SELLSTOP, LotSize, entryPrice, MaxSlippage,
-                           sl, 0,  // TP = 0 (trailing only)
-                           "EGAR", MagicNumber, 0, clrOrangeRed);
+   int ticket = OrderSend(Symbol(), OP_SELLSTOP, g_calcLot, entryPrice, MaxSlippage,
+                           sl, 0, "EGAR", MagicNumber, 0, clrOrangeRed);
 
    if(ticket > 0)
    {
@@ -368,20 +468,16 @@ void PlaceSellStop()
       g_lastPendingType = OP_SELLSTOP;
       Print(">> SellStop #", ticket, " @ ", DoubleToStr(entryPrice, Digits),
             " SL=", DoubleToStr(sl, Digits),
-            " B.Short=", DoubleToStr(g_breakoutShort, Digits),
-            " RSI=", DoubleToStr(g_currentRSI, 1));
+            " Lot=", DoubleToStr(g_calcLot, 2));
    }
    else
    {
-      int err = GetLastError();
-      Print("!! SellStop FAILED: err=", err, " price=", DoubleToStr(entryPrice, Digits),
-            " Bid=", DoubleToStr(Bid, Digits),
-            " minStop=", DoubleToStr(minStopLevel, Digits));
+      Print("!! SellStop FAILED: err=", GetLastError(),
+            " price=", DoubleToStr(entryPrice, Digits),
+            " Bid=", DoubleToStr(Bid, Digits));
    }
 }
 
-//+------------------------------------------------------------------+
-//| Cancel existing pending order                                    |
 //+------------------------------------------------------------------+
 void CancelPendingOrder()
 {
@@ -393,14 +489,12 @@ void CancelPendingOrder()
       return;
    }
 
-   // If already filled or closed, just clear the reference
    if(OrderCloseTime() > 0 || OrderType() == OP_BUY || OrderType() == OP_SELL)
    {
       g_pendingTicket = -1;
       return;
    }
 
-   // Delete pending order
    if(OrderType() == OP_BUYSTOP || OrderType() == OP_SELLSTOP)
    {
       if(OrderDelete(g_pendingTicket))
@@ -408,23 +502,15 @@ void CancelPendingOrder()
          g_totalCancelled++;
          g_pendingTicket = -1;
       }
-      else
-      {
-         Print("!! Cancel pending #", g_pendingTicket, " failed: err=", GetLastError());
-      }
    }
 }
 
 //+------------------------------------------------------------------+
-//| Check if pending order was filled (became market order)          |
-//+------------------------------------------------------------------+
 void CheckPendingFill()
 {
    if(g_pendingTicket <= 0) return;
-
    if(!OrderSelect(g_pendingTicket, SELECT_BY_TICKET)) return;
 
-   // Pending order got filled -> became market position
    if(OrderType() == OP_BUY || OrderType() == OP_SELL)
    {
       g_totalEntries++;
@@ -436,7 +522,7 @@ void CheckPendingFill()
 }
 
 //+------------------------------------------------------------------+
-//| Trailing Stop Management (runs every tick)                       |
+//| Trailing Stop Management                                         |
 //+------------------------------------------------------------------+
 void ManageTrailingStop()
 {
@@ -454,16 +540,12 @@ void ManageTrailingStop()
          double profitPts = (Bid - entryPrice) / Point;
          if(profitPts < TrailStartPts) continue;
 
-         // Trail SL at TrailStopPts behind Bid
          newSL = NormalizeDouble(Bid - TrailStopPts * Point, Digits);
 
-         // Only modify if new SL is better by at least TrailStepPts
          if(newSL > currentSL + TrailStepPts * Point)
          {
             if(!OrderModify(OrderTicket(), entryPrice, newSL, 0, 0, clrDodgerBlue))
-            {
                Print("!! Trail BUY #", OrderTicket(), " failed: err=", GetLastError());
-            }
          }
       }
       else if(OrderType() == OP_SELL)
@@ -471,57 +553,92 @@ void ManageTrailingStop()
          double profitPts = (entryPrice - Ask) / Point;
          if(profitPts < TrailStartPts) continue;
 
-         // Trail SL at TrailStopPts above Ask
          newSL = NormalizeDouble(Ask + TrailStopPts * Point, Digits);
 
-         // Only modify if new SL is better (lower) by at least TrailStepPts
          if(currentSL == 0 || newSL < currentSL - TrailStepPts * Point)
          {
             if(!OrderModify(OrderTicket(), entryPrice, newSL, 0, 0, clrOrangeRed))
-            {
                Print("!! Trail SELL #", OrderTicket(), " failed: err=", GetLastError());
-            }
          }
       }
    }
 }
 
 //+------------------------------------------------------------------+
-//| Session filter: is current time within active sessions?          |
+//| Breakeven Management                                             |
 //+------------------------------------------------------------------+
-bool IsSessionActive()
+void ManageBreakeven()
 {
-   if(!UseLondon && !UseNewYork) return true;
-
-   // Get current UTC hour
-   // Note: TimeCurrent() returns server time.
-   // For accurate UTC, adjust if your broker offset differs.
-   int hour = TimeHour(TimeCurrent());
-
-   bool londonActive  = false;
-   bool newYorkActive = false;
-
-   if(UseLondon)
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
    {
-      if(LondonStart < LondonEnd)
-         londonActive = (hour >= LondonStart && hour < LondonEnd);
-      else
-         londonActive = (hour >= LondonStart || hour < LondonEnd);
-   }
+      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
+      if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
 
-   if(UseNewYork)
-   {
-      if(NYStart < NYEnd)
-         newYorkActive = (hour >= NYStart && hour < NYEnd);
-      else
-         newYorkActive = (hour >= NYStart || hour < NYEnd);
-   }
+      double entryPrice = OrderOpenPrice();
+      double currentSL  = OrderStopLoss();
 
-   return (londonActive || newYorkActive);
+      if(OrderType() == OP_BUY)
+      {
+         // If profit >= BE threshold and SL is still below entry
+         if(currentSL < entryPrice && (Bid - entryPrice) / Point >= BreakevenPts)
+         {
+            double newSL = NormalizeDouble(entryPrice + Point, Digits);
+            if(!OrderModify(OrderTicket(), entryPrice, newSL, 0, 0, clrDodgerBlue))
+               Print("!! BE BUY #", OrderTicket(), " failed: err=", GetLastError());
+            else
+               Print(">> BE BUY #", OrderTicket(), " SL moved to ", DoubleToStr(newSL, Digits));
+         }
+      }
+      else if(OrderType() == OP_SELL)
+      {
+         if((currentSL > entryPrice || currentSL == 0) && (entryPrice - Ask) / Point >= BreakevenPts)
+         {
+            double newSL = NormalizeDouble(entryPrice - Point, Digits);
+            if(!OrderModify(OrderTicket(), entryPrice, newSL, 0, 0, clrOrangeRed))
+               Print("!! BE SELL #", OrderTicket(), " failed: err=", GetLastError());
+            else
+               Print(">> BE SELL #", OrderTicket(), " SL moved to ", DoubleToStr(newSL, Digits));
+         }
+      }
+   }
 }
 
 //+------------------------------------------------------------------+
-//| Count open market positions for this EA                          |
+bool IsSessionActive()
+{
+   if(!UseSessionFilter) return true;
+
+   int hour = TimeHour(TimeCurrent());
+
+   bool active = false;
+
+   if(TradeAsian)
+   {
+      if(AsiaStart < AsiaEnd)
+         active = active || (hour >= AsiaStart && hour < AsiaEnd);
+      else
+         active = active || (hour >= AsiaStart || hour < AsiaEnd);
+   }
+
+   if(TradeLondon)
+   {
+      if(LondonStart < LondonEnd)
+         active = active || (hour >= LondonStart && hour < LondonEnd);
+      else
+         active = active || (hour >= LondonStart || hour < LondonEnd);
+   }
+
+   if(TradeNewYork)
+   {
+      if(NYStart < NYEnd)
+         active = active || (hour >= NYStart && hour < NYEnd);
+      else
+         active = active || (hour >= NYStart || hour < NYEnd);
+   }
+
+   return active;
+}
+
 //+------------------------------------------------------------------+
 int CountOpenPositions()
 {
@@ -536,8 +653,6 @@ int CountOpenPositions()
 }
 
 //+------------------------------------------------------------------+
-//| Scan existing orders on init (recovery after restart)            |
-//+------------------------------------------------------------------+
 void ScanExistingOrders()
 {
    g_pendingTicket = -1;
@@ -547,16 +662,13 @@ void ScanExistingOrders()
       if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
       if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
 
-      // Find existing pending order
       if(OrderType() == OP_BUYSTOP || OrderType() == OP_SELLSTOP)
       {
          g_pendingTicket = OrderTicket();
          g_lastPendingType = OrderType();
-         Print("Found existing pending #", g_pendingTicket);
       }
    }
 
-   // Count existing positions for stats
    g_totalEntries = 0;
    for(int i = OrdersHistoryTotal() - 1; i >= 0; i--)
    {
@@ -574,11 +686,8 @@ void ScanExistingOrders()
 }
 
 //+------------------------------------------------------------------+
-//| Draw information panel                                           |
-//+------------------------------------------------------------------+
 void DrawPanel()
 {
-   //--- Current open positions P/L
    double openPL = 0;
    int openCount = 0;
    for(int i = OrdersTotal()-1; i >= 0; i--)
@@ -592,7 +701,6 @@ void DrawPanel()
       }
    }
 
-   //--- Today's historical P/L
    double todayPL = 0;
    int todayTrades = 0;
    for(int i = OrdersHistoryTotal()-1; i >= 0; i--)
@@ -608,93 +716,75 @@ void DrawPanel()
 
    double spread = MarketInfo(Symbol(), MODE_SPREAD);
 
-   // Line 1: Title + State
-   string stateColor = "";
-   color line1Color = clrYellow;
    MakeLabel("EGAR_L1", 10, 20,
-      "EA Gold Algo RE v1.0 | " + Symbol() + " M" + IntegerToString(Period()),
+      "EA Gold Algo RE v2.0 | " + Symbol() + " M" + IntegerToString(Period()),
       clrGold);
 
-   // Line 2: State + RSI
    color stateClr = clrWhite;
-   if(StringFind(g_currentState, "Up") >= 0 || StringFind(g_currentState, "Upwards") >= 0)
-      stateClr = clrLime;
-   else if(StringFind(g_currentState, "Down") >= 0)
-      stateClr = clrOrangeRed;
-   else if(g_currentState == "Range Bound")
-      stateClr = clrYellow;
-   else if(StringFind(g_currentState, "Unfav") >= 0)
-      stateClr = clrGray;
+   if(StringFind(g_currentState, "Up") >= 0) stateClr = clrLime;
+   else if(StringFind(g_currentState, "Down") >= 0) stateClr = clrOrangeRed;
+   else if(g_currentState == "Range Bound") stateClr = clrYellow;
+   else if(StringFind(g_currentState, "Unfav") >= 0) stateClr = clrGray;
 
    MakeLabel("EGAR_L2", 10, 38,
       "State: " + g_currentState + "  RSI: " + DoubleToStr(g_currentRSI, 1) +
       " (" + g_rsiLabel + ")",
       stateClr);
 
-   // Line 3: Breakout Levels
    MakeLabel("EGAR_L3", 10, 56,
       "B.Long: " + DoubleToStr(g_breakoutLong, Digits) +
       "  B.Short: " + DoubleToStr(g_breakoutShort, Digits) +
       "  Range: $" + DoubleToStr(g_breakoutLong - g_breakoutShort, 2),
       clrCyan);
 
-   // Line 4: Positions + Pending
    string pendStr = (g_pendingTicket > 0) ?
       "#" + IntegerToString(g_pendingTicket) + " " +
       (g_lastPendingType == OP_BUYSTOP ? "BuyStop" : "SellStop") :
       "None";
    MakeLabel("EGAR_L4", 10, 74,
-      "Positions: " + IntegerToString(openCount) + "/" + IntegerToString(MaxPositions) +
-      "  Pending: " + pendStr +
-      "  Spread: " + DoubleToStr(spread, 0) + "pt",
+      "Pos: " + IntegerToString(openCount) + "/" + IntegerToString(MaxPositions) +
+      "  Pend: " + pendStr +
+      "  Spread: " + DoubleToStr(spread, 0) +
+      "  Lot: " + DoubleToStr(g_calcLot, 2),
       clrWhite);
 
-   // Line 5: P/L
    MakeLabel("EGAR_L5", 10, 92,
       "Open P/L: $" + DoubleToStr(openPL, 2) +
       "  Today: $" + DoubleToStr(todayPL, 2) +
-      " (" + IntegerToString(todayTrades) + " trades)",
+      " (" + IntegerToString(todayTrades) + ")",
       (openPL + todayPL) >= 0 ? clrLime : clrRed);
 
-   // Line 6: Stats
    MakeLabel("EGAR_L6", 10, 110,
       "Entries: " + IntegerToString(g_totalEntries) +
-      "  Cancelled: " + IntegerToString(g_totalCancelled) +
-      "  N=" + IntegerToString(N_Bars),
+      "  Cancel: " + IntegerToString(g_totalCancelled) +
+      "  N=" + IntegerToString(N_Bars) +
+      "  Risk=" + DoubleToStr(RiskPercent, 1) + "%",
       clrDimGray);
 
-   //--- Draw Breakout Level lines
    DrawBreakoutLines();
 }
 
 //+------------------------------------------------------------------+
-//| Draw horizontal lines for Breakout Long and Short                |
-//+------------------------------------------------------------------+
 void DrawBreakoutLines()
 {
-   // Breakout Long line
    if(ObjectFind("EGAR_BL") < 0)
       ObjectCreate("EGAR_BL", OBJ_HLINE, 0, 0, g_breakoutLong);
    else
       ObjectSet("EGAR_BL", OBJPROP_PRICE1, g_breakoutLong);
-
    ObjectSet("EGAR_BL", OBJPROP_COLOR, clrDodgerBlue);
    ObjectSet("EGAR_BL", OBJPROP_STYLE, STYLE_DASH);
    ObjectSet("EGAR_BL", OBJPROP_WIDTH, 1);
    ObjectSet("EGAR_BL", OBJPROP_BACK, true);
 
-   // Breakout Short line
    if(ObjectFind("EGAR_BS") < 0)
       ObjectCreate("EGAR_BS", OBJ_HLINE, 0, 0, g_breakoutShort);
    else
       ObjectSet("EGAR_BS", OBJPROP_PRICE1, g_breakoutShort);
-
    ObjectSet("EGAR_BS", OBJPROP_COLOR, clrOrangeRed);
    ObjectSet("EGAR_BS", OBJPROP_STYLE, STYLE_DASH);
    ObjectSet("EGAR_BS", OBJPROP_WIDTH, 1);
    ObjectSet("EGAR_BS", OBJPROP_BACK, true);
 
-   // Pending entry line (if exists)
    if(g_pendingTicket > 0 && OrderSelect(g_pendingTicket, SELECT_BY_TICKET))
    {
       double pendingPrice = OrderOpenPrice();
@@ -716,8 +806,6 @@ void DrawBreakoutLines()
 }
 
 //+------------------------------------------------------------------+
-//| Helper: Create or update label object                            |
-//+------------------------------------------------------------------+
 void MakeLabel(string name, int x, int y, string text, color clr)
 {
    if(ObjectFind(name) < 0)
@@ -728,8 +816,6 @@ void MakeLabel(string name, int x, int y, string text, color clr)
    ObjectSetText(name, text, FontSize, "Consolas", clr);
 }
 
-//+------------------------------------------------------------------+
-//| Cleanup all panel objects                                        |
 //+------------------------------------------------------------------+
 void CleanupPanel()
 {

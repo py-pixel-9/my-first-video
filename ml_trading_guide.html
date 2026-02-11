@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML 트레이딩 완전 가이드 - 머신러닝이 매매를 배우는 과정</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Malgun Gothic', '맑은 고딕', sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            line-height: 1.8;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            padding: 60px 40px;
+            text-align: center;
+            border-bottom: 3px solid #00d2ff;
+            position: relative;
+            overflow: hidden;
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(0,210,255,0.06) 0%, transparent 60%);
+            animation: pulse 4s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .header h1 {
+            font-size: 2.6em;
+            color: #fff;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .header h1 span { color: #00d2ff; }
+        .header .subtitle {
+            font-size: 1.1em;
+            color: #aaa;
+            position: relative;
+        }
+        .header .date {
+            margin-top: 15px;
+            color: #00d2ff;
+            font-size: 0.9em;
+            position: relative;
+        }
+
+        /* Navigation */
+        .nav {
+            background: #111;
+            padding: 15px 40px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid #222;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+        .nav a {
+            color: #888;
+            text-decoration: none;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            transition: all 0.3s;
+            border: 1px solid #333;
+        }
+        .nav a:hover {
+            color: #fff;
+            background: #00d2ff;
+            border-color: #00d2ff;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Section */
+        .section {
+            margin-bottom: 60px;
+        }
+        .section-title {
+            font-size: 1.8em;
+            color: #fff;
+            margin-bottom: 8px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #00d2ff;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .section-desc {
+            color: #999;
+            margin-bottom: 30px;
+            font-size: 0.95em;
+        }
+
+        /* Visual Diagram Box */
+        .diagram-box {
+            background: #0d0d1a;
+            border: 1px solid #1a1a3a;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            overflow-x: auto;
+        }
+        .diagram-box h3 {
+            color: #00d2ff;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+
+        /* Flow Diagram */
+        .flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        .flow-step {
+            background: linear-gradient(145deg, #1a1a3a, #0d0d2a);
+            border: 2px solid #00d2ff44;
+            border-radius: 14px;
+            padding: 18px 22px;
+            min-width: 140px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .flow-step:hover {
+            border-color: #00d2ff;
+            transform: translateY(-3px);
+        }
+        .flow-step .step-num {
+            font-size: 0.7em;
+            color: #00d2ff;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 6px;
+        }
+        .flow-step .step-title {
+            font-size: 1em;
+            color: #fff;
+            font-weight: 700;
+        }
+        .flow-step .step-detail {
+            font-size: 0.78em;
+            color: #888;
+            margin-top: 5px;
+        }
+        .flow-arrow {
+            font-size: 1.8em;
+            color: #00d2ff;
+            padding: 0 8px;
+            flex-shrink: 0;
+        }
+
+        /* Data Table Visual */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.88em;
+        }
+        .data-table th {
+            background: #1a1a3a;
+            color: #00d2ff;
+            padding: 10px 12px;
+            text-align: center;
+            border-bottom: 2px solid #00d2ff44;
+            white-space: nowrap;
+        }
+        .data-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #1a1a2a;
+            color: #ccc;
+            text-align: center;
+        }
+        .data-table tr:hover td { background: #111125; }
+        .buy { color: #00e676; font-weight: 700; }
+        .sell { color: #ff5252; font-weight: 700; }
+        .hold { color: #888; }
+        .highlight-row { background: #00d2ff08; }
+
+        /* Concept Card */
+        .concept-card {
+            background: #111118;
+            border: 1px solid #222;
+            border-radius: 16px;
+            margin-bottom: 25px;
+            overflow: hidden;
+            transition: border-color 0.3s;
+        }
+        .concept-card:hover { border-color: #00d2ff; }
+        .concept-header {
+            padding: 22px 28px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .concept-name {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #fff;
+        }
+        .concept-body {
+            padding: 0 28px 25px;
+        }
+        .concept-body p {
+            color: #bbb;
+            margin-bottom: 12px;
+            font-size: 0.95em;
+        }
+
+        /* Tag */
+        .tag {
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+        .tag-core { background: #00d2ff33; color: #00d2ff; }
+        .tag-easy { background: #00e67633; color: #00e676; }
+        .tag-hard { background: #ff525233; color: #ff5252; }
+        .tag-key { background: #ffab4033; color: #ffab40; }
+
+        /* Visual Chart (CSS Only) */
+        .chart-container {
+            background: #0a0a15;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            position: relative;
+        }
+        .chart-title {
+            font-size: 0.85em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+
+        /* Candle Chart CSS */
+        .candle-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            height: 200px;
+            padding: 0 10px 30px;
+            position: relative;
+            border-bottom: 1px solid #222;
+            border-left: 1px solid #222;
+        }
+        .candle {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            flex: 1;
+            max-width: 30px;
+        }
+        .candle-wick {
+            width: 2px;
+            background: #555;
+        }
+        .candle-body {
+            width: 14px;
+            min-height: 4px;
+            border-radius: 2px;
+        }
+        .candle-green .candle-body { background: #00e676; }
+        .candle-red .candle-body { background: #ff5252; }
+        .candle-green .candle-wick { background: #00e676; }
+        .candle-red .candle-wick { background: #ff5252; }
+        .candle-label {
+            font-size: 0.6em;
+            color: #555;
+            position: absolute;
+            bottom: -22px;
+            white-space: nowrap;
+        }
+
+        /* Bar Chart */
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 80px;
+            margin-top: 10px;
+        }
+        .bar {
+            flex: 1;
+            border-radius: 2px 2px 0 0;
+            transition: all 0.3s;
+            max-width: 30px;
+        }
+        .bar:hover { opacity: 0.8; }
+
+        /* Neural Network Visual */
+        .nn-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            padding: 30px 0;
+            flex-wrap: wrap;
+        }
+        .nn-layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .nn-layer-title {
+            font-size: 0.75em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .nn-node {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65em;
+            font-weight: 700;
+            border: 2px solid;
+            text-align: center;
+            line-height: 1.1;
+        }
+        .nn-input { border-color: #00d2ff; color: #00d2ff; background: #00d2ff11; }
+        .nn-hidden { border-color: #ffab40; color: #ffab40; background: #ffab4011; }
+        .nn-output { border-color: #00e676; color: #00e676; background: #00e67611; }
+        .nn-output.sell-node { border-color: #ff5252; color: #ff5252; background: #ff525211; }
+        .nn-arrows {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            color: #333;
+            font-size: 0.7em;
+        }
+        .nn-arrows span {
+            display: block;
+            height: 1px;
+            width: 40px;
+            background: linear-gradient(90deg, #333, #555);
+        }
+
+        /* Comparison Side by Side */
+        .compare-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .compare-side {
+            background: #0d0d1a;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #222;
+        }
+        .compare-side h4 {
+            margin-bottom: 12px;
+            font-size: 1em;
+        }
+        .compare-human h4 { color: #ffab40; }
+        .compare-ml h4 { color: #00d2ff; }
+        .compare-side ul {
+            list-style: none;
+            padding: 0;
+        }
+        .compare-side li {
+            padding: 5px 0 5px 18px;
+            position: relative;
+            font-size: 0.9em;
+            color: #bbb;
+        }
+        .compare-side li::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+        }
+        .compare-human li::before { color: #ffab40; }
+        .compare-ml li::before { color: #00d2ff; }
+
+        /* Code Block */
+        .code-block {
+            background: #0d0d1a;
+            border: 1px solid #1a1a3a;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.85em;
+            color: #ccc;
+            overflow-x: auto;
+            margin: 15px 0;
+            line-height: 1.6;
+        }
+        .code-block .comment { color: #555; }
+        .code-block .keyword { color: #c792ea; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+        .code-block .function { color: #82aaff; }
+        .code-block .variable { color: #ffcb6b; }
+        .code-block .output { color: #00d2ff; }
+
+        /* Big Number Display */
+        .big-numbers {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .big-num-card {
+            background: linear-gradient(145deg, #1a1a3a, #0d0d2a);
+            border-radius: 14px;
+            padding: 25px 15px;
+            text-align: center;
+            border: 1px solid #1a1a4a;
+        }
+        .big-num-card .num {
+            font-size: 2.2em;
+            font-weight: 800;
+            color: #00d2ff;
+        }
+        .big-num-card .label {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* Pattern Visual */
+        .pattern-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .pattern-card {
+            background: #0d0d1a;
+            border: 1px solid #1a1a3a;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .pattern-card h4 {
+            color: #fff;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+        .pattern-card p {
+            color: #888;
+            font-size: 0.85em;
+        }
+        .pattern-visual {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 4px;
+            height: 80px;
+            margin: 15px 0;
+        }
+        .pv-bar {
+            width: 10px;
+            border-radius: 2px 2px 0 0;
+        }
+
+        /* Zigzag Line Visual */
+        .zigzag-visual {
+            position: relative;
+            height: 120px;
+            margin: 15px 0;
+        }
+        .zigzag-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Info Box */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 15px 0;
+        }
+        .info-box {
+            background: #0a0a15;
+            padding: 14px;
+            border-radius: 10px;
+            border-left: 3px solid #00d2ff;
+        }
+        .info-box .label {
+            font-size: 0.72em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        .info-box .value {
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.92em;
+        }
+
+        /* Highlight Box */
+        .highlight-box {
+            background: linear-gradient(135deg, #00d2ff08, #00d2ff03);
+            border: 1px solid #00d2ff33;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .highlight-box h4 {
+            color: #00d2ff;
+            margin-bottom: 10px;
+        }
+        .highlight-box p, .highlight-box li {
+            color: #ccc;
+            font-size: 0.92em;
+        }
+        .highlight-box ul { list-style: none; padding: 0; }
+        .highlight-box li {
+            padding: 5px 0 5px 18px;
+            position: relative;
+        }
+        .highlight-box li::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+            color: #00d2ff;
+        }
+
+        /* Warning Box */
+        .warning-box {
+            background: linear-gradient(135deg, #ff525208, #ff525203);
+            border: 1px solid #ff525233;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .warning-box h4 {
+            color: #ff5252;
+            margin-bottom: 10px;
+        }
+        .warning-box p {
+            color: #ccc;
+            font-size: 0.92em;
+        }
+
+        /* Tree Diagram */
+        .tree {
+            margin: 20px 0;
+            padding-left: 20px;
+        }
+        .tree-node {
+            position: relative;
+            padding: 8px 0 8px 30px;
+            font-size: 0.9em;
+        }
+        .tree-node::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: #333;
+        }
+        .tree-node::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 18px;
+            width: 20px;
+            height: 1px;
+            background: #333;
+        }
+        .tree-node .tree-label {
+            background: #1a1a3a;
+            padding: 4px 12px;
+            border-radius: 6px;
+            display: inline-block;
+            font-size: 0.9em;
+        }
+        .tree-yes { color: #00e676; }
+        .tree-no { color: #ff5252; }
+        .tree-question { color: #ffab40; }
+        .tree-result { color: #00d2ff; font-weight: 700; }
+
+        /* Accuracy Meter */
+        .accuracy-meter {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 10px 0;
+        }
+        .meter-bar {
+            flex: 1;
+            height: 20px;
+            background: #1a1a3a;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        .meter-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.5s;
+        }
+        .meter-label {
+            font-size: 0.85em;
+            color: #888;
+            min-width: 120px;
+        }
+        .meter-value {
+            font-size: 0.95em;
+            color: #fff;
+            font-weight: 700;
+            min-width: 50px;
+            text-align: right;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: #444;
+            font-size: 0.85em;
+            border-top: 1px solid #1a1a2e;
+            margin-top: 40px;
+        }
+
+        .scroll-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #00d2ff;
+            color: #000;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2em;
+            text-decoration: none;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(0,210,255,0.3);
+            transition: transform 0.3s;
+        }
+        .scroll-top:hover { transform: scale(1.1); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.6em; }
+            .compare-box { grid-template-columns: 1fr; }
+            .pattern-grid { grid-template-columns: 1fr; }
+            .nn-visual { gap: 20px; }
+            .flow { flex-direction: column; }
+            .flow-arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+<div id="top"></div>
+
+<!-- Header -->
+<div class="header">
+    <h1>🤖 <span>ML</span> 트레이딩 완전 가이드</h1>
+    <div class="subtitle">머신러닝이 매매를 "배우는" 과정 — 숫자부터 실전까지</div>
+    <div class="date">2026.02 | trading_strategies_report.html 이어서 | AI/ML 심화 학습용</div>
+</div>
+
+<!-- Navigation -->
+<div class="nav">
+    <a href="#what-is-ml">ML이 뭐야?</a>
+    <a href="#numbers">전부 숫자다</a>
+    <a href="#how-learn">학습 과정</a>
+    <a href="#models">ML 모델 종류</a>
+    <a href="#patterns">차트 패턴 인식</a>
+    <a href="#pipeline">전체 파이프라인</a>
+    <a href="#realworld">실전 활용</a>
+    <a href="#tools">도구 & 비용</a>
+</div>
+
+<div class="container">
+
+<!-- ===== SECTION 1: ML이 뭐야? ===== -->
+<div class="section" id="what-is-ml">
+    <div class="section-title">1. ML(머신러닝)이 뭐야?</div>
+    <p class="section-desc">한 문장 요약: <strong style="color:#00d2ff">"숫자 조합을 보고, 어떤 조합이 승률이 높은지 스스로 찾는 프로그램"</strong></p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">핵심 개념: 사람 vs ML</div>
+            <span class="tag tag-core">핵심</span>
+        </div>
+        <div class="concept-body">
+            <div class="compare-box">
+                <div class="compare-side compare-human">
+                    <h4>👨 사람이 하는 방식 (전통적)</h4>
+                    <ul>
+                        <li>내가 직접 규칙을 정한다</li>
+                        <li>"RSI > 60이면 매수"</li>
+                        <li>"ADX > 25면 추세 있다"</li>
+                        <li>고정된 규칙 → 시장 변하면 안 맞음</li>
+                        <li>경험에 의존 → 편향 발생</li>
+                    </ul>
+                </div>
+                <div class="compare-side compare-ml">
+                    <h4>🤖 ML이 하는 방식</h4>
+                    <ul>
+                        <li>데이터가 규칙을 찾아준다</li>
+                        <li>"RSI 58~67이면서 ADX 23이상일 때 승률 높더라"</li>
+                        <li>사람이 못 찾는 복잡한 조합 발견</li>
+                        <li>시장 변화에 재학습으로 적응 가능</li>
+                        <li>감정 없이 객관적 판단</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="diagram-box">
+        <h3>ML의 본질을 한 그림으로</h3>
+        <div class="flow">
+            <div class="flow-step">
+                <div class="step-num">INPUT</div>
+                <div class="step-title">📊 숫자 데이터</div>
+                <div class="step-detail">RSI, MACD, ADX<br>ROC, 거래량 등</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="border-color:#ffab40;">
+                <div class="step-num" style="color:#ffab40;">PROCESS</div>
+                <div class="step-title">🧠 ML 모델</div>
+                <div class="step-detail">"이 조합이면<br>승률 73%!"</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="border-color:#00e676;">
+                <div class="step-num" style="color:#00e676;">OUTPUT</div>
+                <div class="step-title">✅ 매수 / ❌ 매도</div>
+                <div class="step-detail">확률 기반 판단<br>자동 실행</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="highlight-box">
+        <h4>💡 비유로 이해하기</h4>
+        <p style="margin-bottom:10px;">
+            <strong>사람</strong>: 요리 레시피를 보고 요리한다 (정해진 규칙)<br>
+            <strong>ML</strong>: 1000가지 요리를 먹어보고 "이 재료 조합이 맛있네"를 스스로 깨달음 (데이터에서 학습)
+        </p>
+        <p>
+            <strong>사람</strong>: "RSI 70 이상이면 과매수니까 매도" (고정 규칙)<br>
+            <strong>ML</strong>: 10년 데이터를 보니 "RSI 73이면서 볼륨 감소 중이면 매도, 볼륨 증가 중이면 아직 올라감" (복합 패턴 발견)
+        </p>
+    </div>
+</div>
+
+<!-- ===== SECTION 2: 전부 숫자다 ===== -->
+<div class="section" id="numbers">
+    <div class="section-title">2. 차트의 모든 것은 숫자다</div>
+    <p class="section-desc">캔들, 패턴, 지표 — 전부 숫자로 변환됩니다. ML은 오직 숫자만 봅니다.</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">캔들 1개 = 숫자 5개</div>
+            <span class="tag tag-core">기본</span>
+        </div>
+        <div class="concept-body">
+            <p>우리가 보는 차트의 캔들 하나는 사실 이런 숫자입니다:</p>
+
+            <div class="chart-container">
+                <div class="chart-title">캔들스틱 = OHLCV 숫자</div>
+                <div style="display:flex; align-items:center; justify-content:center; gap:50px; flex-wrap:wrap;">
+                    <!-- Single Candle Visual -->
+                    <div style="position:relative; width:80px; height:200px;">
+                        <!-- Wick top -->
+                        <div style="position:absolute; left:38px; top:10px; width:3px; height:40px; background:#00e676;"></div>
+                        <!-- Body -->
+                        <div style="position:absolute; left:22px; top:50px; width:35px; height:80px; background:#00e676; border-radius:3px;"></div>
+                        <!-- Wick bottom -->
+                        <div style="position:absolute; left:38px; top:130px; width:3px; height:50px; background:#00e676;"></div>
+                        <!-- Labels -->
+                        <div style="position:absolute; right:-65px; top:5px; font-size:0.7em; color:#888;">High: 2105</div>
+                        <div style="position:absolute; right:-65px; top:45px; font-size:0.7em; color:#00e676;">Close: 2095</div>
+                        <div style="position:absolute; right:-65px; top:120px; font-size:0.7em; color:#00e676;">Open: 2050</div>
+                        <div style="position:absolute; right:-58px; top:170px; font-size:0.7em; color:#888;">Low: 2030</div>
+                    </div>
+
+                    <div style="font-size:2em; color:#333;">→</div>
+
+                    <!-- Number representation -->
+                    <div style="background:#0a0a15; padding:20px; border-radius:10px; font-family:monospace;">
+                        <div style="color:#666; font-size:0.8em; margin-bottom:8px;">ML이 보는 것:</div>
+                        <div style="margin:4px 0;"><span style="color:#ffab40;">Open</span>  = <span style="color:#fff;">2050</span></div>
+                        <div style="margin:4px 0;"><span style="color:#ff5252;">High</span>  = <span style="color:#fff;">2105</span></div>
+                        <div style="margin:4px 0;"><span style="color:#00d2ff;">Low</span>   = <span style="color:#fff;">2030</span></div>
+                        <div style="margin:4px 0;"><span style="color:#00e676;">Close</span> = <span style="color:#fff;">2095</span></div>
+                        <div style="margin:4px 0;"><span style="color:#c792ea;">Volume</span>= <span style="color:#fff;">15230</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">지표도 전부 숫자 변환</div>
+            <span class="tag tag-core">핵심</span>
+        </div>
+        <div class="concept-body">
+            <p>RSI, MACD, ADX, ROC... 전부 캔들(OHLCV) 숫자를 가공한 결과물입니다.</p>
+
+            <div class="diagram-box" style="margin:15px 0; padding:20px;">
+                <div style="display:flex; align-items:center; justify-content:center; gap:15px; flex-wrap:wrap;">
+                    <div style="background:#0a0a15; padding:15px; border-radius:10px; text-align:center; min-width:100px;">
+                        <div style="font-size:2em;">📊</div>
+                        <div style="color:#fff; font-size:0.85em; margin-top:5px;">OHLCV<br>원본 데이터</div>
+                    </div>
+                    <div style="font-size:1.5em; color:#333;">→</div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div style="background:#00d2ff11; border:1px solid #00d2ff33; padding:8px 16px; border-radius:8px; font-size:0.85em;">
+                            <span style="color:#00d2ff;">RSI</span> <span style="color:#666;">= 종가 변화율의 상승/하락 비율 →</span> <span style="color:#fff;">62.3</span>
+                        </div>
+                        <div style="background:#c792ea11; border:1px solid #c792ea33; padding:8px 16px; border-radius:8px; font-size:0.85em;">
+                            <span style="color:#c792ea;">MACD</span> <span style="color:#666;">= EMA12 - EMA26 →</span> <span style="color:#fff;">+12.5</span>
+                        </div>
+                        <div style="background:#ffab4011; border:1px solid #ffab4033; padding:8px 16px; border-radius:8px; font-size:0.85em;">
+                            <span style="color:#ffab40;">ADX</span> <span style="color:#666;">= +DI와 -DI의 차이 강도 →</span> <span style="color:#fff;">28.1</span>
+                        </div>
+                        <div style="background:#00e67611; border:1px solid #00e67633; padding:8px 16px; border-radius:8px; font-size:0.85em;">
+                            <span style="color:#00e676;">ROC</span> <span style="color:#666;">= (오늘종가 - 14일전종가) / 14일전종가 × 100 →</span> <span style="color:#fff;">+3.2%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>🎯 ROC (Rate of Change) 쉽게 이해하기</h4>
+                <p><strong>ROC = "N일 전 대비 몇 % 움직였나"</strong></p>
+                <ul>
+                    <li>RSI/MACD = 방향 (위? 아래?)</li>
+                    <li>ADX = 추세의 힘 (강한가? 약한가?)</li>
+                    <li><strong style="color:#00d2ff;">ROC = 속도 (빠르게? 느리게?)</strong></li>
+                    <li>ROC +5% → "14일 전보다 5% 올랐다" (가속 중)</li>
+                    <li>ROC가 +5% → +3% → +1% → 상승 감속 중 (꼭지 근처?)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">ML이 실제로 보는 데이터 테이블</div>
+            <span class="tag tag-key">실제 모습</span>
+        </div>
+        <div class="concept-body">
+            <p>ML에게 전달되는 데이터는 이런 형태입니다. <strong style="color:#00d2ff;">각 행(row) = 캔들 1개 시점의 모든 숫자</strong></p>
+
+            <div style="overflow-x:auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>날짜</th>
+                            <th>Close</th>
+                            <th>RSI</th>
+                            <th>MACD</th>
+                            <th>ADX</th>
+                            <th>ROC</th>
+                            <th>ATR</th>
+                            <th>Volume</th>
+                            <th style="background:#00e67622; color:#00e676;">정답 (5일후)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>01-10</td>
+                            <td>2050</td>
+                            <td>55.2</td>
+                            <td>-3.1</td>
+                            <td>18.3</td>
+                            <td>+1.2%</td>
+                            <td>22.5</td>
+                            <td>12400</td>
+                            <td class="hold">0 (횡보)</td>
+                        </tr>
+                        <tr>
+                            <td>01-11</td>
+                            <td>2048</td>
+                            <td>52.1</td>
+                            <td>-4.5</td>
+                            <td>16.1</td>
+                            <td>+0.8%</td>
+                            <td>21.3</td>
+                            <td>11800</td>
+                            <td class="hold">0 (횡보)</td>
+                        </tr>
+                        <tr class="highlight-row">
+                            <td>01-12</td>
+                            <td>2075</td>
+                            <td><strong style="color:#00e676;">63.8</strong></td>
+                            <td><strong style="color:#00e676;">+8.2</strong></td>
+                            <td><strong style="color:#00e676;">27.5</strong></td>
+                            <td><strong style="color:#00e676;">+3.5%</strong></td>
+                            <td>25.1</td>
+                            <td><strong style="color:#00e676;">18900</strong></td>
+                            <td class="buy">1 (상승! ✅)</td>
+                        </tr>
+                        <tr class="highlight-row">
+                            <td>01-13</td>
+                            <td>2092</td>
+                            <td><strong style="color:#00e676;">67.1</strong></td>
+                            <td><strong style="color:#00e676;">+12.5</strong></td>
+                            <td><strong style="color:#00e676;">31.2</strong></td>
+                            <td><strong style="color:#00e676;">+4.8%</strong></td>
+                            <td>28.3</td>
+                            <td><strong style="color:#00e676;">21500</strong></td>
+                            <td class="buy">1 (상승! ✅)</td>
+                        </tr>
+                        <tr>
+                            <td>01-14</td>
+                            <td>2088</td>
+                            <td>71.5</td>
+                            <td>+14.1</td>
+                            <td>33.8</td>
+                            <td>+5.1%</td>
+                            <td>30.2</td>
+                            <td>15200</td>
+                            <td class="sell">0 (하락 ❌)</td>
+                        </tr>
+                        <tr>
+                            <td>01-15</td>
+                            <td>2070</td>
+                            <td>58.3</td>
+                            <td>+6.2</td>
+                            <td>25.1</td>
+                            <td>+2.1%</td>
+                            <td>32.5</td>
+                            <td>22100</td>
+                            <td class="hold">0 (횡보)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="highlight-box">
+                <h4>🧠 ML이 이 테이블에서 발견하는 패턴</h4>
+                <ul>
+                    <li><strong>정답이 1(상승)인 행들의 공통점:</strong> RSI 60~68, MACD 양수, ADX > 25, ROC > 3%, 볼륨 급증</li>
+                    <li><strong>정답이 0인 행들의 공통점:</strong> RSI < 55이거나 > 70, ADX < 20 또는 ROC 감속 중</li>
+                    <li>사람은 "RSI 60 이상이면 매수"라고 단순화하지만, ML은 <strong>"RSI 60~68이면서 ADX > 25이면서 ROC > 3%이면서 볼륨이 전일 대비 50%↑"</strong>라는 복합 조건을 찾음</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 3: 학습 과정 ===== -->
+<div class="section" id="how-learn">
+    <div class="section-title">3. ML은 어떻게 "학습"하는가?</div>
+    <p class="section-desc">ML 학습 = 과거 데이터에서 "정답을 맞추는 규칙"을 스스로 찾는 과정</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">학습 3단계: 시험공부와 동일하다</div>
+            <span class="tag tag-easy">쉬운 비유</span>
+        </div>
+        <div class="concept-body">
+            <div class="diagram-box" style="margin:0 0 20px;">
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="step-num">STEP 1</div>
+                        <div class="step-title">📚 공부 (학습)</div>
+                        <div class="step-detail">과거 2년 데이터로<br>"정답 맞추기" 연습</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#ffab40;">
+                        <div class="step-num" style="color:#ffab40;">STEP 2</div>
+                        <div class="step-title">📝 모의고사 (검증)</div>
+                        <div class="step-detail">안 본 데이터로<br>진짜 실력 확인</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#00e676;">
+                        <div class="step-num" style="color:#00e676;">STEP 3</div>
+                        <div class="step-title">🎯 실전 (예측)</div>
+                        <div class="step-detail">오늘 데이터 넣으면<br>"매수 73%" 출력</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="compare-box">
+                <div class="compare-side compare-human">
+                    <h4>📚 학생이 시험공부하는 방식</h4>
+                    <ul>
+                        <li>기출문제 500개를 풀어본다 (학습)</li>
+                        <li>패턴이 보인다: "이런 문제는 답이 B"</li>
+                        <li>모의고사로 실력 확인 (검증)</li>
+                        <li>본시험에서 활용 (실전)</li>
+                    </ul>
+                </div>
+                <div class="compare-side compare-ml">
+                    <h4>🤖 ML이 트레이딩 학습하는 방식</h4>
+                    <ul>
+                        <li>과거 캔들 5000개를 본다 (학습)</li>
+                        <li>패턴 발견: "이 숫자 조합이면 상승"</li>
+                        <li>안 본 데이터로 정확도 확인 (검증)</li>
+                        <li>오늘 데이터에 적용 (실전 예측)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">실제 학습 예시: Decision Tree (결정 트리)</div>
+            <span class="tag tag-easy">가장 직관적인 ML</span>
+        </div>
+        <div class="concept-body">
+            <p>ML 중 가장 이해하기 쉬운 모델. <strong style="color:#00d2ff;">질문 → 예/아니오로 분기</strong>하며 최종 판단에 도달합니다.</p>
+
+            <div class="diagram-box">
+                <h3>🌳 Decision Tree가 학습한 매매 규칙</h3>
+                <div style="text-align:center; padding:10px;">
+                    <!-- Tree Visual -->
+                    <div style="display:inline-block; text-align:left;">
+                        <div style="text-align:center; margin-bottom:15px;">
+                            <span style="background:#ffab4022; border:2px solid #ffab40; padding:10px 20px; border-radius:10px; color:#ffab40; font-weight:700;">
+                                RSI > 58 ?
+                            </span>
+                        </div>
+                        <div style="display:flex; gap:60px; justify-content:center;">
+                            <!-- Yes Branch -->
+                            <div style="text-align:center;">
+                                <div style="color:#00e676; font-size:0.85em; margin-bottom:10px;">✅ Yes</div>
+                                <div style="background:#ffab4022; border:2px solid #ffab4066; padding:8px 16px; border-radius:8px; color:#ffab40; margin-bottom:15px;">
+                                    ADX > 23 ?
+                                </div>
+                                <div style="display:flex; gap:30px; justify-content:center;">
+                                    <div style="text-align:center;">
+                                        <div style="color:#00e676; font-size:0.8em; margin-bottom:8px;">✅ Yes</div>
+                                        <div style="background:#ffab4022; border:2px solid #ffab4044; padding:6px 14px; border-radius:8px; color:#ffab40; font-size:0.9em; margin-bottom:12px;">
+                                            ROC > 2% ?
+                                        </div>
+                                        <div style="display:flex; gap:20px; justify-content:center;">
+                                            <div>
+                                                <div style="color:#00e676; font-size:0.75em;">✅ Yes</div>
+                                                <div style="background:#00e67622; border:2px solid #00e676; padding:8px 16px; border-radius:10px; color:#00e676; font-weight:700; margin-top:5px;">
+                                                    🟢 매수!<br><span style="font-size:0.75em; font-weight:400;">승률 73%</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div style="color:#ff5252; font-size:0.75em;">❌ No</div>
+                                                <div style="background:#88888822; border:2px solid #888; padding:8px 16px; border-radius:10px; color:#888; font-weight:700; margin-top:5px;">
+                                                    ⚪ 관망<br><span style="font-size:0.75em; font-weight:400;">승률 51%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="text-align:center;">
+                                        <div style="color:#ff5252; font-size:0.8em; margin-bottom:8px;">❌ No</div>
+                                        <div style="background:#88888822; border:2px solid #888; padding:8px 16px; border-radius:10px; color:#888; font-weight:700;">
+                                            ⚪ 관망<br><span style="font-size:0.75em; font-weight:400;">추세 약함</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- No Branch -->
+                            <div style="text-align:center;">
+                                <div style="color:#ff5252; font-size:0.85em; margin-bottom:10px;">❌ No</div>
+                                <div style="background:#ffab4022; border:2px solid #ffab4066; padding:8px 16px; border-radius:8px; color:#ffab40; margin-bottom:15px;">
+                                    RSI < 35 ?
+                                </div>
+                                <div style="display:flex; gap:30px; justify-content:center;">
+                                    <div>
+                                        <div style="color:#00e676; font-size:0.8em;">✅ Yes</div>
+                                        <div style="background:#ff525222; border:2px solid #ff5252; padding:8px 16px; border-radius:10px; color:#ff5252; font-weight:700; margin-top:5px;">
+                                            🔴 매도!<br><span style="font-size:0.75em; font-weight:400;">과매도 반등 대기</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="color:#ff5252; font-size:0.8em;">❌ No</div>
+                                        <div style="background:#88888822; border:2px solid #888; padding:8px 16px; border-radius:10px; color:#888; font-weight:700; margin-top:5px;">
+                                            ⚪ 관망<br><span style="font-size:0.75em; font-weight:400;">모멘텀 불분명</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>⚠️ 핵심 포인트</h4>
+                <p>위 트리의 숫자(58, 23, 2%)는 <strong>사람이 정한 게 아닙니다</strong>. ML이 5000개의 과거 데이터를 보고 "이 숫자에서 나누면 정답을 가장 잘 맞힌다"고 스스로 찾은 것입니다. 사람이라면 RSI > 60으로 정하겠지만, ML은 데이터를 보고 58이 최적이라는 걸 발견한 겁니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">학습이란 결국 "오차 줄이기"</div>
+            <span class="tag tag-core">핵심 원리</span>
+        </div>
+        <div class="concept-body">
+            <p>ML의 학습 과정을 구체적으로 보면:</p>
+
+            <div class="diagram-box" style="margin: 15px 0;">
+                <h3>학습 반복 과정 (Iteration)</h3>
+                <div style="display:flex; flex-direction:column; gap:15px; padding:10px;">
+                    <!-- Round 1 -->
+                    <div style="display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+                        <div style="min-width:80px; color:#ff5252; font-weight:700;">1회차</div>
+                        <div style="flex:1;">
+                            <div class="accuracy-meter">
+                                <div class="meter-label">정확도</div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill" style="width:52%; background:linear-gradient(90deg,#ff5252,#ff8a80);"></div>
+                                </div>
+                                <div class="meter-value" style="color:#ff5252;">52%</div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.8em; color:#888;">→ 랜덤 수준 (찍기)</div>
+                    </div>
+                    <!-- Round 2 -->
+                    <div style="display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+                        <div style="min-width:80px; color:#ffab40; font-weight:700;">10회차</div>
+                        <div style="flex:1;">
+                            <div class="accuracy-meter">
+                                <div class="meter-label">정확도</div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill" style="width:61%; background:linear-gradient(90deg,#ffab40,#ffd180);"></div>
+                                </div>
+                                <div class="meter-value" style="color:#ffab40;">61%</div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.8em; color:#888;">→ 패턴 보이기 시작</div>
+                    </div>
+                    <!-- Round 3 -->
+                    <div style="display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+                        <div style="min-width:80px; color:#00d2ff; font-weight:700;">100회차</div>
+                        <div style="flex:1;">
+                            <div class="accuracy-meter">
+                                <div class="meter-label">정확도</div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill" style="width:68%; background:linear-gradient(90deg,#00d2ff,#80deea);"></div>
+                                </div>
+                                <div class="meter-value" style="color:#00d2ff;">68%</div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.8em; color:#888;">→ 복합 조건 발견</div>
+                    </div>
+                    <!-- Round 4 -->
+                    <div style="display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+                        <div style="min-width:80px; color:#00e676; font-weight:700;">500회차</div>
+                        <div style="flex:1;">
+                            <div class="accuracy-meter">
+                                <div class="meter-label">정확도</div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill" style="width:73%; background:linear-gradient(90deg,#00e676,#69f0ae);"></div>
+                                </div>
+                                <div class="meter-value" style="color:#00e676;">73%</div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.8em; color:#888;">→ 최적 규칙 수렴 ✅</div>
+                    </div>
+                </div>
+            </div>
+
+            <p style="color:#bbb; font-size:0.9em;">매 반복마다 ML은 "아, RSI 기준을 60이 아니라 58로 바꾸면 정답을 더 잘 맞히는구나" 이런 식으로 스스로 조정합니다. 이게 "학습"입니다.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 4: ML 모델 종류 ===== -->
+<div class="section" id="models">
+    <div class="section-title">4. ML 모델 종류 — 어떤 AI를 쓰는가?</div>
+    <p class="section-desc">트레이딩에서 쓰는 AI는 ChatGPT(LLM)가 아닙니다. 완전히 다른 종류의 ML 모델들입니다.</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">ChatGPT vs 트레이딩 ML — 완전히 다르다!</div>
+            <span class="tag tag-core">핵심 구분</span>
+        </div>
+        <div class="concept-body">
+            <div class="compare-box">
+                <div class="compare-side" style="border-color:#c792ea44;">
+                    <h4 style="color:#c792ea;">🗣️ LLM (GPT, Claude)</h4>
+                    <ul>
+                        <li><strong>목적:</strong> 대화, 텍스트 생성</li>
+                        <li><strong>입력:</strong> "금 가격 전망은?"</li>
+                        <li><strong>출력:</strong> 문장으로 답변</li>
+                        <li><strong>비용:</strong> API 호출당 과금</li>
+                        <li><strong>속도:</strong> 느림 (1~5초)</li>
+                        <li><strong>트레이딩 적합도:</strong> 뉴스 분석에만 적합</li>
+                    </ul>
+                </div>
+                <div class="compare-side" style="border-color:#00d2ff44;">
+                    <h4 style="color:#00d2ff;">📊 트레이딩 ML</h4>
+                    <ul>
+                        <li><strong>목적:</strong> 숫자 예측/분류</li>
+                        <li><strong>입력:</strong> [62.3, 12.5, 28.1, 3.2]</li>
+                        <li><strong>출력:</strong> "매수 확률 73%"</li>
+                        <li><strong>비용:</strong> 완전 무료 (로컬 실행)</li>
+                        <li><strong>속도:</strong> 초고속 (1ms 이하)</li>
+                        <li><strong>트레이딩 적합도:</strong> 직접 매매 시그널 생성</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="highlight-box" style="margin-top:20px;">
+                <h4>💰 비용 비교</h4>
+                <ul>
+                    <li><strong>OpenAI API:</strong> 1000번 호출 ≈ $3~15 (매일 쓰면 한 달 $100+)</li>
+                    <li><strong>XGBoost/RandomForest:</strong> 내 PC에서 무료 실행, 1초에 10만 번 예측 가능</li>
+                    <li><strong>결론:</strong> 매매 시그널은 로컬 ML, 뉴스 분석만 LLM API 사용이 최적</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">트레이딩에 쓰는 ML 모델 4가지</div>
+            <span class="tag tag-key">모델 선택</span>
+        </div>
+        <div class="concept-body">
+
+            <!-- Model 1: Random Forest -->
+            <div class="diagram-box">
+                <h3>🌲 1. Random Forest (랜덤 포레스트)</h3>
+                <p style="color:#bbb; margin-bottom:15px;">Decision Tree 수백 개가 "투표"해서 결정. 나무 하나는 틀릴 수 있지만, 500그루가 다수결로 판단하면 정확도 UP.</p>
+                <div style="display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; margin:15px 0;">
+                    <div style="text-align:center;">
+                        <div style="font-size:2em;">🌳</div>
+                        <div style="font-size:0.7em; color:#00e676;">매수</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:2em;">🌳</div>
+                        <div style="font-size:0.7em; color:#00e676;">매수</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:2em;">🌳</div>
+                        <div style="font-size:0.7em; color:#ff5252;">매도</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:2em;">🌳</div>
+                        <div style="font-size:0.7em; color:#00e676;">매수</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:2em;">🌳</div>
+                        <div style="font-size:0.7em; color:#888;">관망</div>
+                    </div>
+                    <div style="font-size:1.5em; color:#333; margin:0 10px;">→</div>
+                    <div style="text-align:center;">
+                        <div style="font-size:1em; color:#ffab40;">투표 결과</div>
+                        <div style="font-size:1.5em; color:#00e676; font-weight:700;">매수 3표 > 매도 1표</div>
+                        <div style="font-size:1.2em; color:#00e676; font-weight:700;">✅ 최종: 매수!</div>
+                    </div>
+                </div>
+                <div class="info-grid">
+                    <div class="info-box">
+                        <div class="label">난이도</div>
+                        <div class="value" style="color:#00e676;">⭐ 초급 (추천 시작점)</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="label">장점</div>
+                        <div class="value">과적합에 강함, 안정적</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="label">Python 라이브러리</div>
+                        <div class="value">scikit-learn (무료)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model 2: XGBoost -->
+            <div class="diagram-box">
+                <h3>⚡ 2. XGBoost / LightGBM</h3>
+                <p style="color:#bbb; margin-bottom:15px;">트레이딩 ML 대회 우승의 90%를 차지하는 모델. 트리를 순차적으로 쌓되, 이전 트리가 틀린 부분을 다음 트리가 집중적으로 학습합니다.</p>
+                <div style="display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; margin:15px 0;">
+                    <div style="background:#1a1a3a; padding:12px; border-radius:8px; text-align:center; border:1px solid #333;">
+                        <div style="font-size:1em;">🌳</div>
+                        <div style="font-size:0.65em; color:#888;">1차: 대충 맞춤<br>정확도 55%</div>
+                    </div>
+                    <div style="color:#00d2ff; font-size:1.2em;">+</div>
+                    <div style="background:#1a1a3a; padding:12px; border-radius:8px; text-align:center; border:1px solid #333;">
+                        <div style="font-size:1em;">🌳</div>
+                        <div style="font-size:0.65em; color:#888;">2차: 틀린거 보완<br>정확도 62%</div>
+                    </div>
+                    <div style="color:#00d2ff; font-size:1.2em;">+</div>
+                    <div style="background:#1a1a3a; padding:12px; border-radius:8px; text-align:center; border:1px solid #333;">
+                        <div style="font-size:1em;">🌳</div>
+                        <div style="font-size:0.65em; color:#888;">3차: 더 보완<br>정확도 68%</div>
+                    </div>
+                    <div style="color:#00d2ff; font-size:1.2em;">+ ...</div>
+                    <div style="color:#333; font-size:1.5em; margin:0 5px;">→</div>
+                    <div style="background:#00e67622; padding:12px; border-radius:8px; text-align:center; border:2px solid #00e676;">
+                        <div style="font-size:1.3em; color:#00e676; font-weight:700;">🎯 73%</div>
+                        <div style="font-size:0.7em; color:#888;">500그루 합산</div>
+                    </div>
+                </div>
+                <div class="info-grid">
+                    <div class="info-box">
+                        <div class="label">난이도</div>
+                        <div class="value" style="color:#ffab40;">⭐⭐ 중급</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="label">장점</div>
+                        <div class="value">최고 성능, 빠른 학습</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="label">Python 라이브러리</div>
+                        <div class="value">xgboost, lightgbm (무료)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model 3: LSTM -->
+            <div class="diagram-box">
+                <h3>🧠 3. LSTM (딥러닝 - 시계열 전문)</h3>
+                <p style="color:#bbb; margin-bottom:15px;">시간 순서를 기억하는 신경망. "어제 RSI가 55였고 오늘 62면 내일은?" 처럼 과거의 흐름(시퀀스)을 이해합니다.</p>
+
+                <!-- Neural Network Visual -->
+                <div class="nn-visual">
+                    <div class="nn-layer">
+                        <div class="nn-layer-title">입력 (과거 5일)</div>
+                        <div class="nn-node nn-input">Day<br>-5</div>
+                        <div class="nn-node nn-input">Day<br>-4</div>
+                        <div class="nn-node nn-input">Day<br>-3</div>
+                        <div class="nn-node nn-input">Day<br>-2</div>
+                        <div class="nn-node nn-input">Day<br>-1</div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                        <div style="color:#333; font-size:0.7em;">기억 전달</div>
+                        <div style="width:50px; height:2px; background:linear-gradient(90deg,#00d2ff,#ffab40);"></div>
+                        <div style="width:50px; height:2px; background:linear-gradient(90deg,#00d2ff,#ffab40);"></div>
+                        <div style="width:50px; height:2px; background:linear-gradient(90deg,#00d2ff,#ffab40);"></div>
+                    </div>
+                    <div class="nn-layer">
+                        <div class="nn-layer-title">LSTM 셀</div>
+                        <div class="nn-node nn-hidden">기억<br>유지</div>
+                        <div class="nn-node nn-hidden">패턴<br>감지</div>
+                        <div class="nn-node nn-hidden">흐름<br>파악</div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                        <div style="width:50px; height:2px; background:linear-gradient(90deg,#ffab40,#00e676);"></div>
+                        <div style="width:50px; height:2px; background:linear-gradient(90deg,#ffab40,#00e676);"></div>
+                    </div>
+                    <div class="nn-layer">
+                        <div class="nn-layer-title">출력</div>
+                        <div class="nn-node nn-output">매수<br>73%</div>
+                        <div class="nn-node sell-node">매도<br>27%</div>
+                    </div>
+                </div>
+
+                <div class="info-grid">
+                    <div class="info-box">
+                        <div class="label">난이도</div>
+                        <div class="value" style="color:#ff5252;">⭐⭐⭐ 고급</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="label">장점</div>
+                        <div class="value">시간 흐름 패턴 인식에 최강</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="label">Python 라이브러리</div>
+                        <div class="value">TensorFlow, PyTorch (무료)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model comparison -->
+            <div style="overflow-x:auto;">
+                <table class="data-table" style="margin-top:20px;">
+                    <thead>
+                        <tr>
+                            <th>모델</th>
+                            <th>난이도</th>
+                            <th>속도</th>
+                            <th>성능</th>
+                            <th>시계열 이해</th>
+                            <th>추천 단계</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="color:#fff; font-weight:600;">Random Forest</td>
+                            <td style="color:#00e676;">초급 ⭐</td>
+                            <td>빠름</td>
+                            <td>좋음</td>
+                            <td>❌</td>
+                            <td style="color:#00e676;">첫 번째로 배워보기</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#fff; font-weight:600;">XGBoost</td>
+                            <td style="color:#ffab40;">중급 ⭐⭐</td>
+                            <td>매우 빠름</td>
+                            <td>최고</td>
+                            <td>❌</td>
+                            <td style="color:#00d2ff;">실전 사용 추천</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#fff; font-weight:600;">LSTM</td>
+                            <td style="color:#ff5252;">고급 ⭐⭐⭐</td>
+                            <td>느림</td>
+                            <td>좋음</td>
+                            <td>✅ 강함</td>
+                            <td>시계열 패턴 필요 시</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#fff; font-weight:600;">GPT/Claude (LLM)</td>
+                            <td style="color:#c792ea;">별도</td>
+                            <td>매우 느림</td>
+                            <td>보조용</td>
+                            <td>텍스트만</td>
+                            <td>뉴스 센티먼트 분석 보조</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 5: 차트 패턴 인식 ===== -->
+<div class="section" id="patterns">
+    <div class="section-title">5. 차트 패턴도 숫자로 인식한다</div>
+    <p class="section-desc">ZigZag, Fractal, 헤드앤숄더 — 전부 캔들 숫자의 조합이므로 ML이 인식 가능합니다.</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">ZigZag = 고점/저점의 숫자 나열</div>
+            <span class="tag tag-key">패턴→숫자</span>
+        </div>
+        <div class="concept-body">
+            <p>ZigZag 지표는 의미 있는 고점/저점만 연결합니다. 이것도 결국 숫자입니다:</p>
+
+            <div class="chart-container">
+                <div class="chart-title">ZigZag = 숫자로 된 고점/저점 시퀀스</div>
+                <svg viewBox="0 0 600 160" style="width:100%; height:160px;">
+                    <!-- Grid -->
+                    <line x1="40" y1="20" x2="40" y2="140" stroke="#222" stroke-width="1"/>
+                    <line x1="40" y1="140" x2="580" y2="140" stroke="#222" stroke-width="1"/>
+                    <!-- Price lines -->
+                    <line x1="40" y1="40" x2="580" y2="40" stroke="#1a1a3a" stroke-width="1" stroke-dasharray="3"/>
+                    <line x1="40" y1="80" x2="580" y2="80" stroke="#1a1a3a" stroke-width="1" stroke-dasharray="3"/>
+                    <line x1="40" y1="120" x2="580" y2="120" stroke="#1a1a3a" stroke-width="1" stroke-dasharray="3"/>
+                    <!-- Labels -->
+                    <text x="15" y="44" fill="#555" font-size="10">2100</text>
+                    <text x="15" y="84" fill="#555" font-size="10">2060</text>
+                    <text x="15" y="124" fill="#555" font-size="10">2020</text>
+                    <!-- ZigZag Line -->
+                    <polyline points="60,110 140,45 220,95 320,30 410,80 500,25 560,55" fill="none" stroke="#00d2ff" stroke-width="2.5"/>
+                    <!-- Points -->
+                    <circle cx="60" cy="110" r="5" fill="#ff5252"/>
+                    <circle cx="140" cy="45" r="5" fill="#00e676"/>
+                    <circle cx="220" cy="95" r="5" fill="#ff5252"/>
+                    <circle cx="320" cy="30" r="5" fill="#00e676"/>
+                    <circle cx="410" cy="80" r="5" fill="#ff5252"/>
+                    <circle cx="500" cy="25" r="5" fill="#00e676"/>
+                    <!-- Labels -->
+                    <text x="40" y="128" fill="#ff5252" font-size="9">저점 2025</text>
+                    <text x="115" y="40" fill="#00e676" font-size="9">고점 2095</text>
+                    <text x="200" y="113" fill="#ff5252" font-size="9">저점 2045</text>
+                    <text x="298" y="25" fill="#00e676" font-size="9">고점 2105</text>
+                    <text x="388" y="97" fill="#ff5252" font-size="9">저점 2055</text>
+                    <text x="478" y="20" fill="#00e676" font-size="9">고점 2115</text>
+                    <!-- Trend arrow -->
+                    <text x="300" y="155" fill="#00d2ff" font-size="10" text-anchor="middle">↑ 고점 상승, 저점 상승 = 상승 추세 패턴!</text>
+                </svg>
+            </div>
+
+            <div class="highlight-box">
+                <h4>ML이 ZigZag에서 추출하는 숫자 (Feature)</h4>
+                <ul>
+                    <li><strong>고점 간 변화:</strong> 2095 → 2105 → 2115 (고점이 높아지고 있음 = +값)</li>
+                    <li><strong>저점 간 변화:</strong> 2025 → 2045 → 2055 (저점도 높아지고 있음 = +값)</li>
+                    <li><strong>파동 크기:</strong> 70 → 60 → 50 (파동이 줄어듦 = 수렴 중?)</li>
+                    <li><strong>고점-저점 비율:</strong> 상승폭/하락폭 = 모멘텀 측정</li>
+                    <li>이 숫자들을 ML에 넣으면 → "상승 추세 계속될 확률 68%"</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">Fractal = 5캔들 숫자 비교</div>
+            <span class="tag tag-key">패턴→숫자</span>
+        </div>
+        <div class="concept-body">
+            <p>Fractal은 5개 캔들에서 가운데 캔들이 가장 높거나 낮은 패턴입니다. 이것도 단순한 숫자 비교입니다:</p>
+
+            <div class="pattern-grid">
+                <div class="pattern-card">
+                    <h4 style="color:#00e676;">🔺 Fractal High (고점)</h4>
+                    <div class="pattern-visual">
+                        <div class="pv-bar" style="height:40px; background:#555;"></div>
+                        <div class="pv-bar" style="height:55px; background:#888;"></div>
+                        <div class="pv-bar" style="height:75px; background:#00e676; box-shadow: 0 0 10px #00e67644;"></div>
+                        <div class="pv-bar" style="height:50px; background:#888;"></div>
+                        <div class="pv-bar" style="height:35px; background:#555;"></div>
+                    </div>
+                    <p>가운데 High가 양쪽보다 높음</p>
+                    <div style="font-family:monospace; font-size:0.8em; color:#00d2ff; margin-top:8px;">
+                        H3 > H1 AND H3 > H2<br>
+                        AND H3 > H4 AND H3 > H5
+                    </div>
+                </div>
+                <div class="pattern-card">
+                    <h4 style="color:#ff5252;">🔻 Fractal Low (저점)</h4>
+                    <div class="pattern-visual">
+                        <div class="pv-bar" style="height:55px; background:#555;"></div>
+                        <div class="pv-bar" style="height:40px; background:#888;"></div>
+                        <div class="pv-bar" style="height:25px; background:#ff5252; box-shadow: 0 0 10px #ff525244;"></div>
+                        <div class="pv-bar" style="height:45px; background:#888;"></div>
+                        <div class="pv-bar" style="height:60px; background:#555;"></div>
+                    </div>
+                    <p>가운데 Low가 양쪽보다 낮음</p>
+                    <div style="font-family:monospace; font-size:0.8em; color:#00d2ff; margin-top:8px;">
+                        L3 &lt; L1 AND L3 &lt; L2<br>
+                        AND L3 &lt; L4 AND L3 &lt; L5
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>💡 핵심: 모든 패턴은 숫자 비교의 조합이다</h4>
+                <ul>
+                    <li><strong>핀바:</strong> (High - Close) / (High - Low) > 0.66 → "윗꼬리가 전체의 2/3 이상"</li>
+                    <li><strong>장악형:</strong> Close[오늘] > Open[어제] AND Open[오늘] < Close[어제] → "몸통이 이전 캔들을 감쌌다"</li>
+                    <li><strong>헤드앤숄더:</strong> ZigZag 고점이 "낮음-높음-낮음" 순서 → 숫자로 표현 가능</li>
+                    <li><strong>도지:</strong> abs(Open - Close) / (High - Low) < 0.1 → "몸통이 전체의 10% 미만"</li>
+                    <li><strong>결론:</strong> 사람이 눈으로 보는 모든 패턴은 숫자 조건문으로 변환 가능 → ML이 학습 가능!</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 6: 전체 파이프라인 ===== -->
+<div class="section" id="pipeline">
+    <div class="section-title">6. 전체 파이프라인: 데이터 → 학습 → 매매 실행</div>
+    <p class="section-desc">실제로 ML 트레이딩 시스템을 만드는 전체 과정을 순서대로 보여드립니다.</p>
+
+    <div class="diagram-box">
+        <h3>🔄 ML 트레이딩 파이프라인 전체도</h3>
+        <div class="flow" style="margin:20px 0;">
+            <div class="flow-step" style="background:linear-gradient(145deg, #1a0a2a, #0d0d2a); border-color:#c792ea44;">
+                <div class="step-num" style="color:#c792ea;">STEP 1</div>
+                <div class="step-title">📥 데이터 수집</div>
+                <div class="step-detail">MT4 CSV 또는<br>yfinance API</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="step-num">STEP 2</div>
+                <div class="step-title">🔧 피처 생성</div>
+                <div class="step-detail">RSI, MACD, ADX<br>ROC, 패턴 등</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="border-color:#ffab4044;">
+                <div class="step-num" style="color:#ffab40;">STEP 3</div>
+                <div class="step-title">🏷️ 라벨링</div>
+                <div class="step-detail">"5일 후 +1%면<br>정답=매수"</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="border-color:#00d2ff;">
+                <div class="step-num" style="color:#00d2ff;">STEP 4</div>
+                <div class="step-title">🧠 학습</div>
+                <div class="step-detail">RandomForest<br>XGBoost 학습</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="border-color:#00e67644;">
+                <div class="step-num" style="color:#00e676;">STEP 5</div>
+                <div class="step-title">📊 백테스트</div>
+                <div class="step-detail">과거 1년으로<br>수익률 검증</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="border-color:#00e676; background:linear-gradient(145deg, #0a1a0a, #0d0d2a);">
+                <div class="step-num" style="color:#00e676;">STEP 6</div>
+                <div class="step-title">🚀 실전 실행</div>
+                <div class="step-detail">Python → MT4<br>자동 매매</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step by step code -->
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">각 단계별 Python 코드 (실제 동작)</div>
+            <span class="tag tag-easy">복사해서 사용 가능</span>
+        </div>
+        <div class="concept-body">
+
+            <p><strong style="color:#c792ea;">STEP 1:</strong> 데이터 수집</p>
+            <div class="code-block">
+<span class="comment"># pip install yfinance pandas ta-lib</span>
+<span class="keyword">import</span> yfinance <span class="keyword">as</span> yf
+<span class="keyword">import</span> pandas <span class="keyword">as</span> pd
+
+<span class="comment"># 금 선물 2년치 데이터 다운로드</span>
+df = yf.<span class="function">download</span>(<span class="string">"GC=F"</span>, start=<span class="string">"2024-01-01"</span>, end=<span class="string">"2026-02-01"</span>)
+<span class="function">print</span>(df.head())
+<span class="output">#         Open    High     Low   Close    Volume
+# 2024-01 2062.3  2075.1  2055.8  2070.5   15230</span>
+            </div>
+
+            <p><strong style="color:#00d2ff;">STEP 2:</strong> 피처 생성 (지표 계산)</p>
+            <div class="code-block">
+<span class="keyword">import</span> ta  <span class="comment"># pip install ta</span>
+
+<span class="comment"># 모멘텀 지표들</span>
+df[<span class="string">'RSI'</span>] = ta.momentum.<span class="function">RSIIndicator</span>(df[<span class="string">'Close'</span>], window=<span class="number">14</span>).rsi()
+df[<span class="string">'MACD'</span>] = ta.trend.<span class="function">MACD</span>(df[<span class="string">'Close'</span>]).macd()
+df[<span class="string">'ADX'</span>] = ta.trend.<span class="function">ADXIndicator</span>(df[<span class="string">'High'</span>], df[<span class="string">'Low'</span>], df[<span class="string">'Close'</span>]).adx()
+df[<span class="string">'ROC'</span>] = ta.momentum.<span class="function">ROCIndicator</span>(df[<span class="string">'Close'</span>], window=<span class="number">14</span>).roc()
+df[<span class="string">'ATR'</span>] = ta.volatility.<span class="function">AverageTrueRange</span>(df[<span class="string">'High'</span>], df[<span class="string">'Low'</span>], df[<span class="string">'Close'</span>]).average_true_range()
+
+<span class="comment"># 패턴도 숫자로!</span>
+df[<span class="string">'candle_body'</span>] = <span class="function">abs</span>(df[<span class="string">'Close'</span>] - df[<span class="string">'Open'</span>]) / (df[<span class="string">'High'</span>] - df[<span class="string">'Low'</span>])
+df[<span class="string">'upper_wick'</span>] = (df[<span class="string">'High'</span>] - df[[<span class="string">'Close'</span>,<span class="string">'Open'</span>]].max(axis=<span class="number">1</span>)) / (df[<span class="string">'High'</span>] - df[<span class="string">'Low'</span>])
+            </div>
+
+            <p><strong style="color:#ffab40;">STEP 3:</strong> 라벨링 (정답 만들기)</p>
+            <div class="code-block">
+<span class="comment"># 5일 후 가격이 1% 이상 올랐으면 1(매수), 아니면 0(관망)</span>
+df[<span class="string">'future_return'</span>] = df[<span class="string">'Close'</span>].<span class="function">shift</span>(-<span class="number">5</span>) / df[<span class="string">'Close'</span>] - <span class="number">1</span>
+df[<span class="string">'target'</span>] = (df[<span class="string">'future_return'</span>] > <span class="number">0.01</span>).<span class="function">astype</span>(<span class="keyword">int</span>)
+
+<span class="comment"># target = 1 → "이때 샀으면 5일 후 +1% 이상 수익"</span>
+<span class="comment"># target = 0 → "이때 사면 안 됐었음"</span>
+            </div>
+
+            <p><strong style="color:#00d2ff;">STEP 4:</strong> ML 학습</p>
+            <div class="code-block">
+<span class="keyword">from</span> sklearn.ensemble <span class="keyword">import</span> RandomForestClassifier
+
+<span class="comment"># 피처 선택</span>
+features = [<span class="string">'RSI'</span>, <span class="string">'MACD'</span>, <span class="string">'ADX'</span>, <span class="string">'ROC'</span>, <span class="string">'ATR'</span>, <span class="string">'candle_body'</span>, <span class="string">'upper_wick'</span>]
+df = df.<span class="function">dropna</span>()
+
+<span class="comment"># 시간순으로 분리 (미래 데이터 유출 방지!)</span>
+split = <span class="keyword">int</span>(<span class="function">len</span>(df) * <span class="number">0.8</span>)
+X_train, X_test = df[features][:split], df[features][split:]
+y_train, y_test = df[<span class="string">'target'</span>][:split], df[<span class="string">'target'</span>][split:]
+
+<span class="comment"># 학습! (이 한 줄이 "ML이 패턴을 찾는" 과정)</span>
+model = <span class="function">RandomForestClassifier</span>(n_estimators=<span class="number">200</span>, max_depth=<span class="number">5</span>)
+model.<span class="function">fit</span>(X_train, y_train)
+
+<span class="comment"># 정확도 확인</span>
+accuracy = model.<span class="function">score</span>(X_test, y_test)
+<span class="function">print</span>(<span class="string">f"예측 정확도: <span class="variable">{accuracy:.2%}</span>"</span>)
+<span class="output"># → "예측 정확도: 63.5%"</span>
+            </div>
+
+            <p><strong style="color:#00e676;">STEP 5:</strong> 오늘 데이터로 예측</p>
+            <div class="code-block">
+<span class="comment"># 오늘의 지표 숫자를 넣으면 → 매수/매도 예측</span>
+today = df[features].<span class="function">iloc</span>[-<span class="number">1</span>:]  <span class="comment"># 가장 최근 데이터</span>
+prediction = model.<span class="function">predict_proba</span>(today)
+
+<span class="function">print</span>(<span class="string">f"매수 확률: <span class="variable">{prediction[0][1]:.1%}</span>"</span>)
+<span class="output"># → "매수 확률: 73.2%"</span>
+
+<span class="keyword">if</span> prediction[<span class="number">0</span>][<span class="number">1</span>] > <span class="number">0.65</span>:
+    <span class="function">print</span>(<span class="string">"🟢 매수 시그널!"</span>)
+<span class="keyword">elif</span> prediction[<span class="number">0</span>][<span class="number">1</span>] < <span class="number">0.35</span>:
+    <span class="function">print</span>(<span class="string">"🔴 매도 시그널!"</span>)
+<span class="keyword">else</span>:
+    <span class="function">print</span>(<span class="string">"⚪ 관망"</span>)
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 7: 실전 활용 ===== -->
+<div class="section" id="realworld">
+    <div class="section-title">7. 실전 활용 방식 3가지</div>
+    <p class="section-desc">Python ML 시그널을 실제 매매에 연결하는 방법들</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">방식 A: Python → 파일 → MT4 EA (가장 쉬움)</div>
+            <span class="tag tag-easy">추천 시작점</span>
+        </div>
+        <div class="concept-body">
+            <div class="diagram-box">
+                <div class="flow">
+                    <div class="flow-step" style="border-color:#c792ea44;">
+                        <div class="step-title" style="font-size:0.9em;">🐍 Python</div>
+                        <div class="step-detail">ML 예측 실행<br>"매수 73%"</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#ffab4044;">
+                        <div class="step-title" style="font-size:0.9em;">📄 CSV 파일</div>
+                        <div class="step-detail">signal.csv에<br>"BUY" 기록</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#00e67644;">
+                        <div class="step-title" style="font-size:0.9em;">📊 MT4 EA</div>
+                        <div class="step-detail">파일 읽고<br>주문 실행!</div>
+                    </div>
+                </div>
+            </div>
+            <div class="info-grid">
+                <div class="info-box">
+                    <div class="label">난이도</div>
+                    <div class="value" style="color:#00e676;">쉬움 ⭐</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">장점</div>
+                    <div class="value">구현 간단, 디버깅 쉬움</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">단점</div>
+                    <div class="value">파일 I/O 지연 (1~2초)</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">적합한 전략</div>
+                    <div class="value">스윙, 데일리 (스캘핑 부적합)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">방식 B: Python → Socket → MT4 (실시간)</div>
+            <span class="tag tag-key">중급</span>
+        </div>
+        <div class="concept-body">
+            <div class="diagram-box">
+                <div class="flow">
+                    <div class="flow-step" style="border-color:#c792ea44;">
+                        <div class="step-title" style="font-size:0.9em;">🐍 Python</div>
+                        <div class="step-detail">ML 서버 실행<br>포트 5555 대기</div>
+                    </div>
+                    <div class="flow-arrow">⚡</div>
+                    <div class="flow-step" style="border-color:#00d2ff;">
+                        <div class="step-title" style="font-size:0.9em;">🔌 Socket</div>
+                        <div class="step-detail">실시간 통신<br>지연 <10ms</div>
+                    </div>
+                    <div class="flow-arrow">⚡</div>
+                    <div class="flow-step" style="border-color:#00e67644;">
+                        <div class="step-title" style="font-size:0.9em;">📊 MT4 EA</div>
+                        <div class="step-detail">틱마다 시그널<br>즉시 실행</div>
+                    </div>
+                </div>
+            </div>
+            <div class="info-grid">
+                <div class="info-box">
+                    <div class="label">난이도</div>
+                    <div class="value" style="color:#ffab40;">중간 ⭐⭐</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">장점</div>
+                    <div class="value">실시간, 빠른 응답</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">라이브러리</div>
+                    <div class="value">ZeroMQ (zmq)</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">적합한 전략</div>
+                    <div class="value">데이트레이딩, 스캘핑도 가능</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">방식 C: Python 단독 (코인 거래소 직접)</div>
+            <span class="tag tag-key">코인 전용</span>
+        </div>
+        <div class="concept-body">
+            <div class="diagram-box">
+                <div class="flow">
+                    <div class="flow-step" style="border-color:#ffab4044;">
+                        <div class="step-title" style="font-size:0.9em;">📡 거래소 API</div>
+                        <div class="step-detail">바이낸스, 업비트<br>실시간 데이터</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#c792ea44;">
+                        <div class="step-title" style="font-size:0.9em;">🐍 Python</div>
+                        <div class="step-detail">ML 예측 +<br>주문까지 한번에</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#00e67644;">
+                        <div class="step-title" style="font-size:0.9em;">💰 거래소</div>
+                        <div class="step-detail">직접 매수/매도<br>실행 완료!</div>
+                    </div>
+                </div>
+            </div>
+            <div class="info-grid">
+                <div class="info-box">
+                    <div class="label">난이도</div>
+                    <div class="value" style="color:#ffab40;">중간 ⭐⭐</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">장점</div>
+                    <div class="value">MT4 불필요, 심플한 구조</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">라이브러리</div>
+                    <div class="value">ccxt (100+ 거래소 지원)</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">적합한 시장</div>
+                    <div class="value">코인 (24시간 시장)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">OpenAI API는 어디에 쓰나?</div>
+            <span class="tag tag-core">보조 역할</span>
+        </div>
+        <div class="concept-body">
+            <p>LLM(GPT/Claude)은 매매 시그널이 아니라 <strong style="color:#c792ea;">뉴스 센티먼트 분석 보조</strong>에 사용합니다:</p>
+
+            <div class="diagram-box" style="margin:15px 0;">
+                <div class="flow">
+                    <div class="flow-step" style="border-color:#c792ea44;">
+                        <div class="step-title" style="font-size:0.85em;">📰 뉴스</div>
+                        <div class="step-detail">"연준 금리인하<br>시사, 달러약세"</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#c792ea;">
+                        <div class="step-title" style="font-size:0.85em;">🗣️ GPT API</div>
+                        <div class="step-detail">"금 가격 영향:<br>+7점 (긍정)"</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step">
+                        <div class="step-title" style="font-size:0.85em;">📊 ML 피처 추가</div>
+                        <div class="step-detail">sentiment = +7<br>다른 지표와 합침</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#00e67644;">
+                        <div class="step-title" style="font-size:0.85em;">🧠 ML 예측</div>
+                        <div class="step-detail">매수 확률<br>73% → 78%↑</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>⚠️ LLM API 사용 시 주의</h4>
+                <p>
+                    <strong>비용:</strong> 호출당 $0.003~0.015 → 하루 100번 = 월 $10~45<br>
+                    <strong>속도:</strong> 1~5초 소요 → 스캘핑 불가<br>
+                    <strong>용도:</strong> 데일리/스윙 전략의 <strong>보조 피처</strong>로만 사용 추천<br>
+                    <strong>핵심 매매 시그널은 반드시 로컬 ML (XGBoost 등)로!</strong>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 8: 도구 & 비용 ===== -->
+<div class="section" id="tools">
+    <div class="section-title">8. 필요한 도구 & 비용 정리</div>
+    <p class="section-desc">Windows x64에서 바로 시작할 수 있습니다. 대부분 무료!</p>
+
+    <div class="big-numbers">
+        <div class="big-num-card">
+            <div class="num">$0</div>
+            <div class="label">ML 모델 비용<br>(scikit-learn, XGBoost)</div>
+        </div>
+        <div class="big-num-card">
+            <div class="num">$0</div>
+            <div class="label">Python + 라이브러리<br>(전부 무료 오픈소스)</div>
+        </div>
+        <div class="big-num-card">
+            <div class="num">$0</div>
+            <div class="label">데이터 수집<br>(yfinance 무료)</div>
+        </div>
+        <div class="big-num-card">
+            <div class="num">PC</div>
+            <div class="label">필요한 하드웨어<br>(본인 PC로 충분)</div>
+        </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>도구</th>
+                    <th>용도</th>
+                    <th>비용</th>
+                    <th>설치 명령</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="color:#fff; font-weight:600;">Python 3.11+</td>
+                    <td>프로그래밍 언어</td>
+                    <td style="color:#00e676;">무료</td>
+                    <td style="font-family:monospace; font-size:0.8em;">python.org 다운로드</td>
+                </tr>
+                <tr>
+                    <td style="color:#fff; font-weight:600;">pandas</td>
+                    <td>데이터 처리</td>
+                    <td style="color:#00e676;">무료</td>
+                    <td style="font-family:monospace; font-size:0.8em;">pip install pandas</td>
+                </tr>
+                <tr>
+                    <td style="color:#fff; font-weight:600;">ta</td>
+                    <td>기술적 지표 계산</td>
+                    <td style="color:#00e676;">무료</td>
+                    <td style="font-family:monospace; font-size:0.8em;">pip install ta</td>
+                </tr>
+                <tr>
+                    <td style="color:#fff; font-weight:600;">scikit-learn</td>
+                    <td>ML 모델 (RandomForest 등)</td>
+                    <td style="color:#00e676;">무료</td>
+                    <td style="font-family:monospace; font-size:0.8em;">pip install scikit-learn</td>
+                </tr>
+                <tr>
+                    <td style="color:#fff; font-weight:600;">XGBoost</td>
+                    <td>고성능 ML 모델</td>
+                    <td style="color:#00e676;">무료</td>
+                    <td style="font-family:monospace; font-size:0.8em;">pip install xgboost</td>
+                </tr>
+                <tr>
+                    <td style="color:#fff; font-weight:600;">yfinance</td>
+                    <td>가격 데이터 수집</td>
+                    <td style="color:#00e676;">무료</td>
+                    <td style="font-family:monospace; font-size:0.8em;">pip install yfinance</td>
+                </tr>
+                <tr>
+                    <td style="color:#fff; font-weight:600;">TensorFlow</td>
+                    <td>딥러닝 (LSTM 등)</td>
+                    <td style="color:#00e676;">무료</td>
+                    <td style="font-family:monospace; font-size:0.8em;">pip install tensorflow</td>
+                </tr>
+                <tr>
+                    <td style="color:#fff; font-weight:600;">OpenAI API</td>
+                    <td>뉴스 센티먼트 (보조)</td>
+                    <td style="color:#ffab40;">유료 ($0.003~/호출)</td>
+                    <td style="font-family:monospace; font-size:0.8em;">pip install openai</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="concept-card" style="margin-top:30px;">
+        <div class="concept-header">
+            <div class="concept-name">🎯 학습 로드맵 (추천 순서)</div>
+            <span class="tag tag-core">시작 가이드</span>
+        </div>
+        <div class="concept-body">
+            <div style="display:flex; flex-direction:column; gap:15px; padding:10px 0;">
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <div style="min-width:100px; text-align:center;">
+                        <div style="background:#00e67622; border:2px solid #00e676; border-radius:50%; width:50px; height:50px; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:700; color:#00e676;">1주</div>
+                    </div>
+                    <div>
+                        <div style="color:#fff; font-weight:600;">Python 기초 + 데이터 수집</div>
+                        <div style="color:#888; font-size:0.85em;">yfinance로 데이터 받기, pandas로 다루기</div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <div style="min-width:100px; text-align:center;">
+                        <div style="background:#00d2ff22; border:2px solid #00d2ff; border-radius:50%; width:50px; height:50px; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:700; color:#00d2ff;">2주</div>
+                    </div>
+                    <div>
+                        <div style="color:#fff; font-weight:600;">지표 계산 + 피처 만들기</div>
+                        <div style="color:#888; font-size:0.85em;">ta 라이브러리로 RSI, MACD, ADX, ROC 계산</div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <div style="min-width:100px; text-align:center;">
+                        <div style="background:#ffab4022; border:2px solid #ffab40; border-radius:50%; width:50px; height:50px; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:700; color:#ffab40;">3주</div>
+                    </div>
+                    <div>
+                        <div style="color:#fff; font-weight:600;">첫 ML 모델 (RandomForest)</div>
+                        <div style="color:#888; font-size:0.85em;">라벨링 → 학습 → 정확도 확인 → 백테스트</div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <div style="min-width:100px; text-align:center;">
+                        <div style="background:#c792ea22; border:2px solid #c792ea; border-radius:50%; width:50px; height:50px; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:700; color:#c792ea;">4주</div>
+                    </div>
+                    <div>
+                        <div style="color:#fff; font-weight:600;">XGBoost + 피처 최적화</div>
+                        <div style="color:#888; font-size:0.85em;">더 나은 모델 + 어떤 지표가 중요한지 분석</div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <div style="min-width:100px; text-align:center;">
+                        <div style="background:#ff525222; border:2px solid #ff5252; border-radius:50%; width:50px; height:50px; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:700; color:#ff5252;">5주+</div>
+                    </div>
+                    <div>
+                        <div style="color:#fff; font-weight:600;">실전 연동 (Python → MT4)</div>
+                        <div style="color:#888; font-size:0.85em;">파일 I/O 또는 Socket으로 MT4 EA와 연결</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="warning-box" style="margin-top:30px;">
+        <h4>⚠️ 과적합(Overfitting) — ML 트레이딩의 최대 적</h4>
+        <p style="margin-bottom:10px;">
+            ML이 과거 데이터를 "외워버리는" 현상. 시험 기출만 달달 외우면 새 문제를 못 푸는 것과 같음.
+        </p>
+        <p>
+            <strong>방지법:</strong><br>
+            ① 학습/테스트 데이터를 반드시 시간순 분리 (미래 데이터 유출 방지)<br>
+            ② 모델 복잡도 제한 (max_depth=5 등)<br>
+            ③ Walk-forward 검증 (3개월 학습 → 1개월 테스트 반복)<br>
+            ④ 학습 정확도 95%인데 테스트 55%면 → 과적합! 의심해야 함
+        </p>
+    </div>
+</div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+    <p>본 자료는 ML 트레이딩 학습 참고용이며, 투자 조언이 아닙니다.</p>
+    <p>모든 전략은 반드시 충분한 백테스트와 리스크 관리 하에 적용하세요.</p>
+    <p style="margin-top: 15px; color: #333;">Generated by Claude | 2026.02 | trading_strategies_report.html 이어서</p>
+</div>
+
+<a href="#top" class="scroll-top">↑</a>
+
+</body>
+</html>

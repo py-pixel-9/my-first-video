@@ -701,6 +701,10 @@
     <a href="#pipeline">전체 파이프라인</a>
     <a href="#realworld">실전 활용</a>
     <a href="#tools">도구 & 비용</a>
+    <a href="#overfit">과적합 심화</a>
+    <a href="#ml-vs-dl">ML vs 딥러닝</a>
+    <a href="#cnn-gpu">CNN & GPU</a>
+    <a href="#breakout-ml">돌파매매 ML</a>
 </div>
 
 <div class="container">
@@ -2040,6 +2044,594 @@ prediction = model.<span class="function">predict_proba</span>(today)
     </div>
 </div>
 
+</div>
+
+<!-- ===== SECTION 9: 과적합 심화 ===== -->
+<div class="section" id="overfit">
+    <div class="section-title">9. 과적합 심화 — XAUUSD $2000→$5000 문제</div>
+    <p class="section-desc">금 가격이 2년 만에 2배 오르면, 과거 학습 데이터가 현재에 안 맞습니다. 해결법을 알아봅시다.</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">절대 가격 vs 비율 — 과적합의 핵심 원인</div>
+            <span class="tag tag-core">핵심</span>
+        </div>
+        <div class="concept-body">
+            <div class="compare-box">
+                <div class="compare-side" style="border-color:#ff525244;">
+                    <h4 style="color:#ff5252;">❌ 잘못된 피처 (절대 가격)</h4>
+                    <ul>
+                        <li>Close = 5000 ← 2020년엔 1800이었음</li>
+                        <li>High = 5050 ← 스케일 완전 다름</li>
+                        <li>Volume = 150000 ← 시장 성장으로 커짐</li>
+                        <li>MACD = 45.2 ← 가격에 비례해서 커짐</li>
+                        <li>ML: "Close 2500 이상이면 과매수!" → 5000에서 계속 매도만 함 💀</li>
+                    </ul>
+                </div>
+                <div class="compare-side" style="border-color:#00e67644;">
+                    <h4 style="color:#00e676;">✅ 올바른 피처 (비율/정규화)</h4>
+                    <ul>
+                        <li>RSI = 63.5 ← 0~100 범위, 시대 무관</li>
+                        <li>ROC(14) = +3.2% ← 퍼센트, 가격 무관</li>
+                        <li>ATR / Close = 0.8% ← 비율이라 가격 무관</li>
+                        <li>Volume / MA(20) = 1.5배 ← 배수라 시대 무관</li>
+                        <li>MACD / Close × 100 = 0.9% ← 정규화 완료!</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>💡 핵심 원칙</h4>
+                <p>ML에 넣는 모든 숫자는 <strong style="color:#00d2ff;">절대값이 아니라 비율, 퍼센트, 정규화된 값</strong>이어야 합니다. 그러면 금이 $1000이든 $5000이든 패턴이 동일하게 작동합니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">XGBoost vs RandomForest 과적합 비교</div>
+            <span class="tag tag-key">모델별 차이</span>
+        </div>
+        <div class="concept-body">
+            <div style="overflow-x:auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>항목</th><th>RandomForest</th><th>XGBoost/LightGBM</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td style="color:#fff;">과적합 경향</td><td>중간</td><td style="color:#ff5252;">더 취약</td></tr>
+                        <tr><td style="color:#fff;">이유</td><td>독립적 트리가 투표</td><td>이전 오류에 집착하며 학습</td></tr>
+                        <tr><td style="color:#fff;">비유</td><td>학생 200명 각자 풀고 다수결</td><td>한 학생이 틀린 문제만 반복</td></tr>
+                        <tr><td style="color:#fff;">방지법</td><td>max_depth 제한</td><td>max_depth + learning_rate + early_stopping</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p style="margin-top:15px; color:#bbb;">XGBoost 과적합 방지 설정:</p>
+            <div class="code-block">
+model = <span class="function">XGBClassifier</span>(
+    max_depth=<span class="number">4</span>,           <span class="comment"># 트리 깊이 제한 (깊으면 과적합)</span>
+    learning_rate=<span class="number">0.05</span>,    <span class="comment"># 천천히 학습 (급하면 과적합)</span>
+    n_estimators=<span class="number">1000</span>,     <span class="comment"># 많이 돌리되</span>
+    early_stopping_rounds=<span class="number">50</span>, <span class="comment"># 50회 연속 개선 없으면 멈춤</span>
+    subsample=<span class="number">0.8</span>,         <span class="comment"># 데이터 80%만 랜덤 사용</span>
+    colsample_bytree=<span class="number">0.8</span>,  <span class="comment"># 피처 80%만 랜덤 사용</span>
+    reg_alpha=<span class="number">0.1</span>,         <span class="comment"># L1 정규화 (복잡도 벌점)</span>
+    reg_lambda=<span class="number">1.0</span>,        <span class="comment"># L2 정규화 (복잡도 벌점)</span>
+)
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">Walk-Forward 검증 — 가장 중요한 과적합 방지법</div>
+            <span class="tag tag-core">필수</span>
+        </div>
+        <div class="concept-body">
+            <p>10년치를 한번에 학습하면 안 됩니다. <strong style="color:#00d2ff;">최근 N개월만 학습 → 다음 달 테스트 → 이동 반복</strong></p>
+
+            <div class="diagram-box">
+                <h3>Walk-Forward: 슬라이딩 윈도우 학습</h3>
+                <div style="display:flex; flex-direction:column; gap:8px; padding:10px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div style="min-width:50px; color:#888; font-size:0.8em;">라운드1</div>
+                        <div style="flex:3; height:24px; background:#00d2ff33; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:0.7em; color:#00d2ff;">학습: 2024.01~03</div>
+                        <div style="flex:1; height:24px; background:#00e67633; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:0.7em; color:#00e676;">테스트: 04</div>
+                        <div style="font-size:0.8em; color:#888; min-width:60px;">→ 62%</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div style="min-width:50px; color:#888; font-size:0.8em;">라운드2</div>
+                        <div style="flex:3; height:24px; background:#00d2ff33; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:0.7em; color:#00d2ff;">학습: 2024.04~06</div>
+                        <div style="flex:1; height:24px; background:#00e67633; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:0.7em; color:#00e676;">테스트: 07</div>
+                        <div style="font-size:0.8em; color:#888; min-width:60px;">→ 65%</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div style="min-width:50px; color:#888; font-size:0.8em;">라운드3</div>
+                        <div style="flex:3; height:24px; background:#00d2ff33; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:0.7em; color:#00d2ff;">학습: 2024.07~09</div>
+                        <div style="flex:1; height:24px; background:#00e67633; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:0.7em; color:#00e676;">테스트: 10</div>
+                        <div style="font-size:0.8em; color:#888; min-width:60px;">→ 61%</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div style="min-width:50px; color:#888; font-size:0.8em;">라운드4</div>
+                        <div style="flex:3; height:24px; background:#00d2ff33; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:0.7em; color:#00d2ff;">학습: 2024.10~12</div>
+                        <div style="flex:1; height:24px; background:#00e67633; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:0.7em; color:#00e676;">테스트: 01</div>
+                        <div style="font-size:0.8em; color:#888; min-width:60px;">→ 64%</div>
+                    </div>
+                </div>
+                <p style="color:#888; font-size:0.85em; margin-top:10px; text-align:center;">항상 "최근 3개월"만 학습 → 2015년 $1100 시절 데이터가 2026년에 영향 안 줌!</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 10: ML vs 딥러닝 ===== -->
+<div class="section" id="ml-vs-dl">
+    <div class="section-title">10. 머신러닝 vs 딥러닝 — 정확한 차이</div>
+    <p class="section-desc">딥러닝은 머신러닝의 "한 종류"입니다. 머신러닝 ⊃ 딥러닝</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">AI 계층 구조</div>
+            <span class="tag tag-core">전체 그림</span>
+        </div>
+        <div class="concept-body">
+            <div class="diagram-box">
+                <!-- Nested boxes visual -->
+                <div style="border:2px solid #333; border-radius:16px; padding:20px; margin:10px;">
+                    <div style="color:#888; font-size:0.85em; margin-bottom:10px;">🌐 AI (인공지능) — 가장 큰 범주</div>
+                    <div style="border:2px solid #ffab40; border-radius:14px; padding:18px; margin:5px;">
+                        <div style="color:#ffab40; font-size:0.85em; margin-bottom:10px;">🧠 머신러닝 (ML) — "데이터에서 패턴 학습"</div>
+                        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                            <div style="flex:1; min-width:200px; border:2px solid #00d2ff; border-radius:12px; padding:15px;">
+                                <div style="color:#00d2ff; font-size:0.85em; margin-bottom:8px;">📊 전통 ML</div>
+                                <div style="font-size:0.8em; color:#bbb; line-height:1.6;">
+                                    • Decision Tree<br>
+                                    • Random Forest<br>
+                                    • <strong style="color:#00e676;">XGBoost / LightGBM</strong> ← 트레이딩 최강<br>
+                                    • SVM, KNN 등
+                                </div>
+                            </div>
+                            <div style="flex:1; min-width:200px; border:2px solid #c792ea; border-radius:12px; padding:15px;">
+                                <div style="color:#c792ea; font-size:0.85em; margin-bottom:8px;">🔮 딥러닝 (DL) — "신경망으로 학습"</div>
+                                <div style="font-size:0.8em; color:#bbb; line-height:1.6;">
+                                    • <strong style="color:#00e676;">LSTM</strong> ← 시계열 (가격 예측)<br>
+                                    • <strong style="color:#00e676;">CNN</strong> ← 이미지 (차트 패턴)<br>
+                                    • Transformer ← GPT, Claude<br>
+                                    • GAN 등
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">전통 ML vs 딥러닝 핵심 차이</div>
+            <span class="tag tag-key">비교</span>
+        </div>
+        <div class="concept-body">
+            <div class="compare-box">
+                <div class="compare-side" style="border-color:#00d2ff44;">
+                    <h4 style="color:#00d2ff;">📊 전통 ML (XGBoost)</h4>
+                    <ul>
+                        <li><strong>사람이 피처를 만들어줌</strong></li>
+                        <li>"RSI, MACD, ADX 이걸 보고 판단해"</li>
+                        <li>데이터 적어도 됨 (500~5000개)</li>
+                        <li>학습 빠름 (수 초~수 분)</li>
+                        <li>CPU로 충분, GPU 불필요</li>
+                        <li>해석 가능: "RSI가 중요했다" 알 수 있음</li>
+                        <li><strong>비유: 재료 준비 → 기계가 요리</strong></li>
+                    </ul>
+                </div>
+                <div class="compare-side" style="border-color:#c792ea44;">
+                    <h4 style="color:#c792ea;">🔮 딥러닝 (LSTM/CNN)</h4>
+                    <ul>
+                        <li><strong>알아서 피처를 찾아냄</strong></li>
+                        <li>"원본 데이터 줄게, 알아서 판단해"</li>
+                        <li>데이터 많이 필요 (10만개+)</li>
+                        <li>학습 느림 (수 시간~수 일)</li>
+                        <li>GPU 권장 (10~50배 빠름)</li>
+                        <li>블랙박스: "왜 매수?" → "설명 못해"</li>
+                        <li><strong>비유: 재료 준비부터 요리까지 기계가</strong></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="diagram-box" style="margin-top:20px;">
+                <h3>숫자 인식 vs 이미지 인식</h3>
+                <div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center; margin:15px 0;">
+                    <div style="flex:1; min-width:250px; text-align:center;">
+                        <div style="font-size:1em; color:#00d2ff; margin-bottom:10px;">📊 전통 ML (XGBoost)</div>
+                        <div style="background:#0a0a15; padding:15px; border-radius:10px; font-family:monospace; font-size:0.85em;">
+                            <span style="color:#666;">입력:</span><br>
+                            RSI=<span style="color:#00d2ff;">63</span>, MACD=<span style="color:#00d2ff;">12.5</span><br>
+                            ADX=<span style="color:#00d2ff;">28</span>, ROC=<span style="color:#00d2ff;">3.2</span><br><br>
+                            <span style="color:#666;">→ "이 숫자 조합이면 매수"</span><br>
+                            <span style="color:#888;">(차트 모양은 모름)</span>
+                        </div>
+                    </div>
+                    <div style="flex:1; min-width:250px; text-align:center;">
+                        <div style="font-size:1em; color:#c792ea; margin-bottom:10px;">🖼️ 딥러닝 CNN</div>
+                        <div style="background:#0a0a15; padding:15px; border-radius:10px;">
+                            <div style="font-size:0.85em; color:#666;">입력:</div>
+                            <div style="display:flex; align-items:flex-end; justify-content:center; gap:3px; height:60px; margin:10px 0;">
+                                <div style="width:6px; height:30px; background:#ff5252; border-radius:1px;"></div>
+                                <div style="width:6px; height:35px; background:#ff5252; border-radius:1px;"></div>
+                                <div style="width:6px; height:25px; background:#00e676; border-radius:1px;"></div>
+                                <div style="width:6px; height:40px; background:#00e676; border-radius:1px;"></div>
+                                <div style="width:6px; height:55px; background:#00e676; border-radius:1px;"></div>
+                                <div style="width:6px; height:50px; background:#00e676; border-radius:1px;"></div>
+                            </div>
+                            <div style="font-size:0.85em; color:#666;">→ "이 패턴 모양이 돌파 직전!"</div>
+                            <div style="font-size:0.8em; color:#888;">(이미지 자체를 인식)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>🎯 트레이딩에서 뭐가 더 좋나?</h4>
+                <ul>
+                    <li><strong>대부분의 경우 XGBoost가 딥러닝보다 낫습니다!</strong></li>
+                    <li>트레이딩 데이터는 적음 (10년 = 캔들 2500개뿐) → 딥러닝은 과적합</li>
+                    <li>"왜 매수했어?" 답할 수 있어야 신뢰 → XGBoost는 해석 가능</li>
+                    <li><strong>딥러닝이 유리한 경우:</strong> ①틱 데이터 수백만개 ②차트 이미지 CNN ③뉴스 NLP</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 11: CNN & GPU ===== -->
+<div class="section" id="cnn-gpu">
+    <div class="section-title">11. CNN 딥러닝 & GPU — 내 PC로 가능한가?</div>
+    <p class="section-desc">CNN은 차트 이미지를 직접 보고 패턴을 인식합니다. GPU가 필요하지만, 모든 GPU가 되는 건 아닙니다.</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">GPU 종류 — 딥러닝 가능 여부</div>
+            <span class="tag tag-core">핵심 구분</span>
+        </div>
+        <div class="concept-body">
+            <div style="display:flex; flex-direction:column; gap:15px; margin:15px 0;">
+                <!-- iGPU -->
+                <div style="display:flex; align-items:center; gap:15px; background:#ff525208; border:1px solid #ff525233; border-radius:12px; padding:15px;">
+                    <div style="font-size:2em; min-width:50px; text-align:center;">💻</div>
+                    <div style="flex:1;">
+                        <div style="color:#fff; font-weight:600;">내장 GPU (Intel UHD, AMD Radeon 내장)</div>
+                        <div style="color:#888; font-size:0.85em;">모든 PC의 CPU 안에 들어있음</div>
+                    </div>
+                    <div style="color:#ff5252; font-weight:700; min-width:100px; text-align:center;">❌ 불가능<br><span style="font-size:0.75em; font-weight:400; color:#888;">연산력 부족</span></div>
+                </div>
+                <!-- NVIDIA -->
+                <div style="display:flex; align-items:center; gap:15px; background:#00e67608; border:1px solid #00e67633; border-radius:12px; padding:15px;">
+                    <div style="font-size:2em; min-width:50px; text-align:center;">🎮</div>
+                    <div style="flex:1;">
+                        <div style="color:#fff; font-weight:600;">NVIDIA 외장 GPU (GeForce GTX/RTX)</div>
+                        <div style="color:#888; font-size:0.85em;">게이밍 PC에 장착, CUDA 코어 지원</div>
+                    </div>
+                    <div style="color:#00e676; font-weight:700; min-width:100px; text-align:center;">✅ 완벽 지원<br><span style="font-size:0.75em; font-weight:400; color:#888;">딥러닝 표준</span></div>
+                </div>
+                <!-- AMD dGPU -->
+                <div style="display:flex; align-items:center; gap:15px; background:#ffab4008; border:1px solid #ffab4033; border-radius:12px; padding:15px;">
+                    <div style="font-size:2em; min-width:50px; text-align:center;">🔴</div>
+                    <div style="flex:1;">
+                        <div style="color:#fff; font-weight:600;">AMD 외장 GPU (Radeon RX)</div>
+                        <div style="color:#888; font-size:0.85em;">게임은 되지만 CUDA 미지원</div>
+                    </div>
+                    <div style="color:#ffab40; font-weight:700; min-width:100px; text-align:center;">⚠️ 매우 제한적<br><span style="font-size:0.75em; font-weight:400; color:#888;">ROCm 지원 일부만</span></div>
+                </div>
+                <!-- Apple Silicon -->
+                <div style="display:flex; align-items:center; gap:15px; background:#00d2ff08; border:1px solid #00d2ff33; border-radius:12px; padding:15px;">
+                    <div style="font-size:2em; min-width:50px; text-align:center;">🍎</div>
+                    <div style="flex:1;">
+                        <div style="color:#fff; font-weight:600;">Apple Silicon (M1/M2/M3/M4 칩)</div>
+                        <div style="color:#888; font-size:0.85em;">Mac에 내장된 통합 GPU, Metal/MPS 가속</div>
+                    </div>
+                    <div style="color:#00d2ff; font-weight:700; min-width:100px; text-align:center;">✅ 가능<br><span style="font-size:0.75em; font-weight:400; color:#888;">MPS 가속</span></div>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>💡 일반 사무용/노트북 PC는?</h4>
+                <p>
+                    대부분의 사무용 PC, 저가 노트북에는 <strong>내장 GPU만</strong> 있습니다 → <strong>딥러닝 불가능</strong>.<br>
+                    게이밍 PC나 워크스테이션에만 NVIDIA 외장 GPU가 장착되어 있습니다.<br><br>
+                    <strong>GPU 없이 딥러닝하는 방법:</strong><br>
+                    • CPU로 학습 → 되긴 하지만 10~50배 느림<br>
+                    • <strong style="color:#00d2ff;">Google Colab (무료)</strong> → 브라우저에서 T4 GPU 사용 가능<br>
+                    • Kaggle Notebooks → P100 GPU 무료
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">내 PC 환경 분석</div>
+            <span class="tag tag-key">실전</span>
+        </div>
+        <div class="concept-body">
+            <div style="overflow-x:auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>PC</th><th>GPU</th><th>VRAM</th><th>딥러닝</th><th>CNN 학습</th><th>추천 용도</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="color:#fff; font-weight:600;">Windows PC</td>
+                            <td style="color:#00e676;">RTX 2060 SUPER</td>
+                            <td>8GB GDDR6</td>
+                            <td style="color:#00e676; font-weight:700;">✅ 완벽</td>
+                            <td style="color:#00e676;">⭐ 매우 좋음</td>
+                            <td>CNN + LSTM + XGBoost 전부 가능</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#fff; font-weight:600;">Mac Mini M시리즈</td>
+                            <td style="color:#00d2ff;">Apple Silicon 통합</td>
+                            <td>16GB 통합메모리</td>
+                            <td style="color:#00d2ff;">✅ 가능</td>
+                            <td>보통 (MPS)</td>
+                            <td>XGBoost 학습, 경량 딥러닝</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="diagram-box" style="margin-top:20px;">
+                <h3>RTX 2060 SUPER로 가능한 작업</h3>
+                <div style="display:flex; flex-direction:column; gap:10px; padding:10px;">
+                    <div class="accuracy-meter">
+                        <div class="meter-label">차트 이미지 10만장 CNN</div>
+                        <div class="meter-bar"><div class="meter-fill" style="width:85%; background:linear-gradient(90deg,#00e676,#69f0ae);"></div></div>
+                        <div class="meter-value" style="color:#00e676;">30분~2시간</div>
+                    </div>
+                    <div class="accuracy-meter">
+                        <div class="meter-label">LSTM 시계열 학습</div>
+                        <div class="meter-bar"><div class="meter-fill" style="width:90%; background:linear-gradient(90deg,#00d2ff,#80deea);"></div></div>
+                        <div class="meter-value" style="color:#00d2ff;">10~30분</div>
+                    </div>
+                    <div class="accuracy-meter">
+                        <div class="meter-label">XGBoost 학습</div>
+                        <div class="meter-bar"><div class="meter-fill" style="width:98%; background:linear-gradient(90deg,#ffab40,#ffd180);"></div></div>
+                        <div class="meter-value" style="color:#ffab40;">10초 이내</div>
+                    </div>
+                    <div class="accuracy-meter">
+                        <div class="meter-label">실시간 예측 (추론)</div>
+                        <div class="meter-bar"><div class="meter-fill" style="width:99%; background:linear-gradient(90deg,#c792ea,#e1bee7);"></div></div>
+                        <div class="meter-value" style="color:#c792ea;">1ms 이하</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="warning-box" style="margin-top:20px;">
+                <h4>⚠️ 저장소 공간 주의</h4>
+                <p>
+                    <strong>현재:</strong> 233GB SSD 중 197GB 사용 (<strong style="color:#ff5252;">36GB 남음</strong>)<br><br>
+                    <strong>ML 작업 필요 공간:</strong><br>
+                    • Python + 라이브러리: ~5GB<br>
+                    • 틱 데이터 (1년치): 5~20GB<br>
+                    • 차트 이미지 10만장: ~10GB<br>
+                    • 학습된 모델: ~1GB<br><br>
+                    → <strong style="color:#ffab40;">36GB로 빠듯할 수 있음!</strong> 외장 SSD 또는 불필요한 파일 정리 추천
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">CNN이 차트 이미지를 인식하는 과정</div>
+            <span class="tag tag-core">핵심 원리</span>
+        </div>
+        <div class="concept-body">
+            <p>CNN은 사람처럼 차트 "모양"을 보고 패턴을 인식합니다. 사람이 패턴 이름을 안 알려줘도 스스로 발견합니다.</p>
+
+            <div class="diagram-box">
+                <h3>CNN 차트 패턴 인식 파이프라인</h3>
+                <div class="flow" style="margin:15px 0;">
+                    <div class="flow-step">
+                        <div class="step-num">STEP 1</div>
+                        <div class="step-title">📸 차트 캡처</div>
+                        <div class="step-detail">최근 50봉을<br>224×224 이미지로</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#ffab4044;">
+                        <div class="step-num" style="color:#ffab40;">STEP 2</div>
+                        <div class="step-title">🏷️ 라벨링</div>
+                        <div class="step-detail">이후 상승=1<br>하락=0 태깅</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#c792ea;">
+                        <div class="step-num" style="color:#c792ea;">STEP 3</div>
+                        <div class="step-title">🧠 CNN 학습</div>
+                        <div class="step-detail">10만 장으로<br>패턴 발견</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#00e676;">
+                        <div class="step-num" style="color:#00e676;">STEP 4</div>
+                        <div class="step-title">🎯 실전 예측</div>
+                        <div class="step-detail">현재 차트 →<br>"돌파 76%"</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>🤖 CNN이 사람 도움 없이 스스로 발견하는 패턴들</h4>
+                <ul>
+                    <li>헤드앤숄더 형태</li>
+                    <li>더블바텀 / 더블탑</li>
+                    <li>삼각수렴 후 돌파 방향</li>
+                    <li>긴 아래꼬리 캔들 (핀바)</li>
+                    <li>볼륨 급증 구간의 캔들 모양</li>
+                    <li><strong style="color:#00d2ff;">사람이 이름 붙이지도 않은 미세 패턴까지!</strong></li>
+                </ul>
+            </div>
+
+            <div style="overflow-x:auto; margin-top:20px;">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>틱 데이터 활용 시나리오</th><th>모델</th><th>방법</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="color:#fff;">틱 → 시계열 패턴</td>
+                            <td style="color:#00d2ff;">LSTM</td>
+                            <td>틱 간격/속도 변화로 돌파 가속 감지</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#fff;">틱 → 이미지 변환</td>
+                            <td style="color:#c792ea;">CNN</td>
+                            <td>틱 차트를 이미지로 변환 후 패턴 인식</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#fff;">복합 (추천)</td>
+                            <td style="color:#00e676;">XGBoost + CNN</td>
+                            <td>1차 숫자 필터 → 2차 이미지 확인</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 12: 돌파매매 ML ===== -->
+<div class="section" id="breakout-ml">
+    <div class="section-title">12. 돌파매매 + ML — 진짜/가짜 돌파 구분</div>
+    <p class="section-desc">후행 지표로 선행 예측이 가능한 이유와, ML로 돌파 성공률을 높이는 방법</p>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">후행 지표의 "변화율" = 사실상 선행 신호</div>
+            <span class="tag tag-core">핵심 인사이트</span>
+        </div>
+        <div class="concept-body">
+            <p>지표 각각은 후행이지만, <strong style="color:#00d2ff;">여러 지표의 "변화 속도" 조합</strong>은 돌파 직전에 나타나는 선행 신호가 됩니다.</p>
+
+            <div class="compare-box">
+                <div class="compare-side" style="border-color:#ff525244;">
+                    <h4 style="color:#ff5252;">👨 사람이 보는 방식 (후행)</h4>
+                    <ul>
+                        <li>캔들 상승 → RSI 상승</li>
+                        <li>"아, 올라가고 있구나" (이미 늦음)</li>
+                        <li>돌파 확인 → 진입 → 이미 위에서 삼</li>
+                    </ul>
+                </div>
+                <div class="compare-side" style="border-color:#00e67644;">
+                    <h4 style="color:#00e676;">🤖 ML이 보는 방식 (패턴 조합)</h4>
+                    <ul>
+                        <li>RSI가 55→58→62 <strong>가속 중</strong></li>
+                        <li>+ ADX가 20→24 상승 중 (아직 25 안 됨)</li>
+                        <li>+ ROC 음수→양수 전환 직후</li>
+                        <li>+ 볼륨 평소의 1.3배</li>
+                        <li>→ "이 조합, 과거 73% 돌파 성공!" ← 아직 돌파 전!</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="diagram-box" style="margin-top:20px;">
+                <h3>후행 지표 → 변화율(1차 미분) → 선행 신호</h3>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin:15px 0;">
+                    <div style="background:#0a0a15; padding:15px; border-radius:10px; flex:1; min-width:200px;">
+                        <div style="color:#ff5252; font-size:0.85em; margin-bottom:8px;">RSI 자체 (후행)</div>
+                        <div style="font-family:monospace; color:#ccc; font-size:0.85em;">
+                            RSI = 62 → "지금 좀 올라간 상태"<br>
+                            <span style="color:#888;">정보 부족, 판단 어려움</span>
+                        </div>
+                    </div>
+                    <div style="font-size:1.5em; color:#333; display:flex; align-items:center;">→</div>
+                    <div style="background:#0a0a15; padding:15px; border-radius:10px; flex:1; min-width:200px; border:1px solid #00d2ff33;">
+                        <div style="color:#00d2ff; font-size:0.85em; margin-bottom:8px;">RSI 변화 속도 (1차 미분)</div>
+                        <div style="font-family:monospace; color:#ccc; font-size:0.85em;">
+                            3봉 전 55 → 지금 62 = <strong style="color:#00e676;">+7/3봉</strong><br>
+                            <span style="color:#00e676;">"빠르게 가속 중! 돌파 직전?"</span>
+                        </div>
+                    </div>
+                    <div style="font-size:1.5em; color:#333; display:flex; align-items:center;">→</div>
+                    <div style="background:#0a0a15; padding:15px; border-radius:10px; flex:1; min-width:200px; border:1px solid #00e67633;">
+                        <div style="color:#00e676; font-size:0.85em; margin-bottom:8px;">RSI 가속도 (2차 미분)</div>
+                        <div style="font-family:monospace; color:#ccc; font-size:0.85em;">
+                            속도: +5 → +7 = <strong style="color:#00e676;">가속!</strong><br>
+                            <span style="color:#00e676;">"점점 더 세지고 있다!"</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="concept-card">
+        <div class="concept-header">
+            <div class="concept-name">돌파매매 ML 피처 설계</div>
+            <span class="tag tag-key">실전 적용</span>
+        </div>
+        <div class="concept-body">
+            <p>ML에게 "이 돌파가 진짜인지 가짜인지" 판단할 재료를 주는 것:</p>
+
+            <div class="info-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+                <div class="info-box" style="border-left-color:#00d2ff;">
+                    <div class="label">모멘텀 가속도</div>
+                    <div class="value">RSI 변화속도, MACD 기울기, ROC의 ROC</div>
+                </div>
+                <div class="info-box" style="border-left-color:#00e676;">
+                    <div class="label">돌파 품질</div>
+                    <div class="value">돌파 캔들 크기/ATR, 볼륨/평균볼륨, 몸통비율</div>
+                </div>
+                <div class="info-box" style="border-left-color:#ffab40;">
+                    <div class="label">돌파 전 축적</div>
+                    <div class="value">ATR 축소 여부, ADX 수준, 저항선 터치 횟수</div>
+                </div>
+                <div class="info-box" style="border-left-color:#c792ea;">
+                    <div class="label">시장 컨텍스트</div>
+                    <div class="value">상위 TF 추세, 세션(런던/뉴욕), 변동성 상태</div>
+                </div>
+            </div>
+
+            <div class="highlight-box" style="margin-top:20px;">
+                <h4>🎯 ML이 찾아내는 진짜 vs 가짜 돌파 패턴</h4>
+                <ul>
+                    <li><strong style="color:#00e676;">진짜 돌파 (82%):</strong> RSI 가속 중 + 볼륨 1.8배 + ATR 축소→확대 + 저항선 3번째 터치</li>
+                    <li><strong style="color:#ff5252;">가짜 돌파 (71%):</strong> RSI 변화 없음 + 볼륨 평균 이하 + 윗꼬리 긴 캔들</li>
+                    <li>이 판단을 사람이 실시간으로 7~8개 지표 동시에 보면서 하기는 불가능 → <strong style="color:#00d2ff;">ML이 0.001초에 판단!</strong></li>
+                </ul>
+            </div>
+
+            <div class="diagram-box" style="margin-top:20px;">
+                <h3>🚀 추천 3단계 필터 시스템</h3>
+                <div class="flow" style="margin:15px 0;">
+                    <div class="flow-step" style="border-color:#00d2ff;">
+                        <div class="step-num" style="color:#00d2ff;">LAYER 1</div>
+                        <div class="step-title" style="font-size:0.9em;">⚡ XGBoost</div>
+                        <div class="step-detail">"돌파 구간인가?"<br>숫자 기반 필터<br><span style="color:#00d2ff;">0.001초</span></div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#c792ea;">
+                        <div class="step-num" style="color:#c792ea;">LAYER 2</div>
+                        <div class="step-title" style="font-size:0.9em;">🖼️ CNN</div>
+                        <div class="step-detail">"차트 패턴이<br>진짜 돌파인가?"<br><span style="color:#c792ea;">0.1초</span></div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" style="border-color:#00e676;">
+                        <div class="step-num" style="color:#00e676;">LAYER 3</div>
+                        <div class="step-title" style="font-size:0.9em;">🧠 LSTM</div>
+                        <div class="step-detail">"틱 흐름이<br>돌파 가속 중?"<br><span style="color:#00e676;">최적 타이밍</span></div>
+                    </div>
+                </div>
+                <div style="text-align:center; margin-top:10px;">
+                    <div style="display:inline-flex; gap:20px; align-items:center;">
+                        <div style="color:#888; font-size:0.85em;">XGBoost 단독: 65%</div>
+                        <div style="color:#00d2ff; font-size:0.85em;">+ CNN: 72%</div>
+                        <div style="color:#00e676; font-size:0.85em; font-weight:700;">+ LSTM: 75%+ 🎯</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Footer -->

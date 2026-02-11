@@ -38,6 +38,7 @@ input int       EndHour             = 22;
 //=== 재진입 방지 ===
 input double    UsedZonePips        = 20.0;     // 사용된 레벨 근처 재진입 금지 범위
 input int       MaxUsedHistory      = 50;       // 기록 보관 개수
+input double    BreachCancelPips    = 3.0;      // 돌파 후 펜딩 취소 거리 (pips)
 
 //=== 표시 ===
 input bool      ShowPanel           = true;
@@ -111,10 +112,45 @@ void OnTick()
       SyncOrders();
    }
 
+   CheckBreachCancel();   // 틱마다 돌파 취소 체크 (봉 사이에도!)
    if(UseTrailing) DoTrailing();
    CheckFills();
    if(ShowPanel) DrawPanel();
    if(ShowLines) DrawLines();
+}
+
+//+------------------------------------------------------------------+
+//| 틱 단위 돌파 취소 - Sell Stop이 돌파 후 되돌림에서 체결되는 것 방지 |
+//+------------------------------------------------------------------+
+void CheckBreachCancel()
+{
+   double breachDist = BreachCancelPips * g_pip;
+
+   for(int i = ArraySize(g_levels) - 1; i >= 0; i--)
+   {
+      if(!g_levels[i].active) continue;
+      if(g_levels[i].ticket <= 0) continue;  // 주문 없으면 AgeLevels에서 처리
+
+      // 펜딩 주문이 아직 체결 안 됐는지 확인
+      if(!OrderSelect(g_levels[i].ticket, SELECT_BY_TICKET)) continue;
+      if(OrderType() == OP_BUY || OrderType() == OP_SELL) continue;  // 이미 체결됨
+      if(OrderCloseTime() > 0) continue;  // 이미 삭제됨
+
+      // Buy Stop인데 가격이 이미 위로 돌파해서 지나감
+      if(g_levels[i].isBullish && Bid > g_levels[i].price + breachDist)
+      {
+         Print("▲ [틱] BuyStop 돌파 취소: ", DoubleToStr(g_levels[i].price, Digits));
+         MarkPriceUsed(g_levels[i].price, true);
+         KillLevel(i);
+      }
+      // Sell Stop인데 가격이 이미 아래로 돌파해서 지나감
+      else if(!g_levels[i].isBullish && Ask < g_levels[i].price - breachDist)
+      {
+         Print("▼ [틱] SellStop 돌파 취소: ", DoubleToStr(g_levels[i].price, Digits));
+         MarkPriceUsed(g_levels[i].price, false);
+         KillLevel(i);
+      }
+   }
 }
 
 //+------------------------------------------------------------------+
@@ -334,28 +370,37 @@ void AddLevel(double price, bool isBull, int touches)
 void AgeLevels()
 {
    double maxDist = MaxLevelDistPips * g_pip;
+   double breachDist = BreachCancelPips * g_pip;
 
    for(int i = ArraySize(g_levels) - 1; i >= 0; i--)
    {
       if(!g_levels[i].active) continue;
       g_levels[i].barAge++;
 
+      // 만료
       if(g_levels[i].barAge > CandlesBeforeExpiry)
       { KillLevel(i); continue; }
 
-      if(g_levels[i].isBullish && g_levels[i].ticket <= 0 &&
-         Bid > g_levels[i].price + 5 * g_pip)
+      // ─── 핵심 수정: 가격이 레벨을 돌파하면 펜딩 유무 관계없이 즉시 취소 ───
+      // Buy Stop: 가격이 레벨 위로 돌파 후 지나감 → 돌파 매매 기회 놓침 → 취소
+      if(g_levels[i].isBullish && Bid > g_levels[i].price + breachDist)
       {
+         Print("▲ BuyStop 레벨 돌파됨 → 취소: ", DoubleToStr(g_levels[i].price, Digits),
+               " Bid=", DoubleToStr(Bid, Digits));
          MarkPriceUsed(g_levels[i].price, true);
          KillLevel(i); continue;
       }
-      if(!g_levels[i].isBullish && g_levels[i].ticket <= 0 &&
-         Ask < g_levels[i].price - 5 * g_pip)
+      // Sell Stop: 가격이 레벨 아래로 돌파 후 지나감 → 돌파 매매 기회 놓침 → 취소
+      // ★ ticket 조건 제거! 주문이 걸려있어도 돌파되면 취소해야 됨
+      if(!g_levels[i].isBullish && Ask < g_levels[i].price - breachDist)
       {
+         Print("▼ SellStop 레벨 돌파됨 → 취소: ", DoubleToStr(g_levels[i].price, Digits),
+               " Ask=", DoubleToStr(Ask, Digits));
          MarkPriceUsed(g_levels[i].price, false);
          KillLevel(i); continue;
       }
 
+      // 거리 초과
       if(g_levels[i].isBullish && g_levels[i].price - Ask > maxDist)
       { KillLevel(i); continue; }
       if(!g_levels[i].isBullish && Bid - g_levels[i].price > maxDist)

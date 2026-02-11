@@ -4,6 +4,7 @@ import { DESCENDING_CHANNEL_BREAKOUT } from "./CandleChart/scenes/DescendingChan
 import { chartSceneSchema } from "./CandleChart/types";
 import { HelloWorld, myCompSchema } from "./HelloWorld";
 import { Logo, myCompSchema2 } from "./HelloWorld/Logo";
+import { TradingIntro } from "./Intro";
 
 // Each <Composition> is an entry in the sidebar!
 
@@ -44,6 +45,21 @@ export const RemotionRoot: React.FC = () => {
           logoColor2: "#86A8E7" as const,
         }}
       />
+      <Folder name="Intro">
+        <Composition
+          id="TradingIntro"
+          component={TradingIntro}
+          durationInFrames={150}
+          fps={30}
+          width={1920}
+          height={1080}
+          defaultProps={{
+            channelName: "YHH TRADING",
+            tagline: "ALGORITHMIC GOLD TRADING",
+            accentColor: "#FFD700",
+          }}
+        />
+      </Folder>
       <Folder name="CandleChart">
         <Composition
           id="DescendingChannelBreakout"

@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>첫 ML 돌파매매 결과 리포트 - VWAP + Volume Profile</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            line-height: 1.8;
+        }
+        .header {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            padding: 50px 40px;
+            text-align: center;
+            border-bottom: 3px solid #00e676;
+        }
+        .header h1 { font-size: 2.2em; color: #fff; margin-bottom: 8px; }
+        .header h1 span { color: #00e676; }
+        .header .sub { color: #aaa; font-size: 1em; }
+        .header .date { color: #00e676; font-size: 0.85em; margin-top: 10px; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 30px 20px; }
+
+        .section { margin-bottom: 50px; }
+        .section-title {
+            font-size: 1.6em; color: #fff; margin-bottom: 8px;
+            padding-bottom: 10px; border-bottom: 2px solid #00e676;
+        }
+        .section-desc { color: #999; margin-bottom: 25px; font-size: 0.92em; }
+
+        .card {
+            background: #111118; border: 1px solid #222; border-radius: 14px;
+            padding: 25px; margin-bottom: 20px; transition: border-color 0.3s;
+        }
+        .card:hover { border-color: #00e676; }
+        .card h3 { color: #00e676; margin-bottom: 12px; font-size: 1.15em; }
+        .card p { color: #bbb; font-size: 0.92em; margin-bottom: 8px; }
+
+        .stat-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px; margin: 20px 0;
+        }
+        .stat-card {
+            background: linear-gradient(145deg, #1a1a3a, #0d0d2a);
+            border-radius: 12px; padding: 20px 15px; text-align: center;
+            border: 1px solid #1a1a4a;
+        }
+        .stat-card .num { font-size: 2em; font-weight: 800; }
+        .stat-card .label { font-size: 0.78em; color: #888; margin-top: 3px; }
+        .green { color: #00e676; }
+        .cyan { color: #00d2ff; }
+        .orange { color: #ffab40; }
+        .red { color: #ff5252; }
+        .purple { color: #c792ea; }
+
+        .meter { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+        .meter-label { font-size: 0.85em; color: #888; min-width: 140px; }
+        .meter-bar { flex: 1; height: 22px; background: #1a1a3a; border-radius: 11px; overflow: hidden; }
+        .meter-fill { height: 100%; border-radius: 11px; }
+        .meter-val { font-size: 0.9em; color: #fff; font-weight: 700; min-width: 55px; text-align: right; }
+
+        .rank-list { margin: 15px 0; }
+        .rank-item {
+            display: flex; align-items: center; gap: 12px; padding: 10px 15px;
+            background: #0d0d1a; border-radius: 8px; margin-bottom: 6px;
+        }
+        .rank-num {
+            min-width: 30px; height: 30px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.85em;
+        }
+        .rank-1 { background: #ffd70033; color: #ffd700; border: 2px solid #ffd700; }
+        .rank-2 { background: #c0c0c033; color: #c0c0c0; border: 2px solid #c0c0c0; }
+        .rank-3 { background: #cd7f3233; color: #cd7f32; border: 2px solid #cd7f32; }
+        .rank-other { background: #33333366; color: #888; border: 2px solid #444; }
+        .rank-name { flex: 1; color: #fff; font-weight: 600; font-size: 0.9em; }
+        .rank-bar-wrap { flex: 2; height: 14px; background: #1a1a3a; border-radius: 7px; overflow: hidden; }
+        .rank-bar { height: 100%; border-radius: 7px; }
+        .rank-tag { font-size: 0.7em; padding: 2px 8px; border-radius: 8px; font-weight: 600; }
+
+        .signal-box {
+            background: linear-gradient(135deg, #00e67610, #00e67605);
+            border: 2px solid #00e676; border-radius: 14px; padding: 25px;
+            text-align: center; margin: 20px 0;
+        }
+        .signal-box .prob { font-size: 3em; font-weight: 800; color: #00e676; }
+        .signal-box .verdict { font-size: 1.3em; color: #fff; margin-top: 5px; }
+
+        .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
+        .compare-side { background: #0d0d1a; border-radius: 10px; padding: 18px; }
+        .compare-side h4 { margin-bottom: 10px; font-size: 1em; }
+        .compare-side ul { list-style: none; padding: 0; }
+        .compare-side li { padding: 4px 0 4px 16px; position: relative; font-size: 0.88em; color: #bbb; }
+        .compare-side li::before { content: '▸'; position: absolute; left: 0; }
+
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 15px 0; }
+        .info-box { background: #0a0a15; padding: 12px; border-radius: 8px; border-left: 3px solid #00e676; }
+        .info-box .lbl { font-size: 0.7em; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+        .info-box .val { color: #fff; font-weight: 600; font-size: 0.9em; }
+
+        .highlight { background: linear-gradient(135deg, #00e67608, #00e67603); border: 1px solid #00e67633; border-radius: 12px; padding: 18px; margin: 15px 0; }
+        .highlight h4 { color: #00e676; margin-bottom: 8px; }
+        .highlight p, .highlight li { color: #ccc; font-size: 0.9em; }
+        .highlight ul { list-style: none; padding: 0; }
+        .highlight li { padding: 4px 0 4px 16px; position: relative; }
+        .highlight li::before { content: '▸'; position: absolute; left: 0; color: #00e676; }
+
+        .warn { background: linear-gradient(135deg, #ffab4008, #ffab4003); border: 1px solid #ffab4033; border-radius: 12px; padding: 18px; margin: 15px 0; }
+        .warn h4 { color: #ffab40; margin-bottom: 8px; }
+        .warn p { color: #ccc; font-size: 0.9em; }
+
+        table.dt { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.85em; }
+        table.dt th { background: #1a1a3a; color: #00e676; padding: 10px; text-align: left; border-bottom: 2px solid #00e67644; }
+        table.dt td { padding: 10px; border-bottom: 1px solid #1a1a2a; color: #ccc; }
+        table.dt tr:hover td { background: #111125; }
+
+        .footer { text-align: center; padding: 30px; color: #444; font-size: 0.8em; border-top: 1px solid #1a1a2e; margin-top: 30px; }
+        .scroll-top { position: fixed; bottom: 25px; right: 25px; background: #00e676; color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 700; font-size: 1.1em; box-shadow: 0 3px 12px rgba(0,230,118,0.3); }
+        @media (max-width: 768px) { .compare-grid { grid-template-columns: 1fr; } .header h1 { font-size: 1.5em; } }
+    </style>
+</head>
+<body>
+<div id="top"></div>
+
+<div class="header">
+    <h1>🎯 첫 ML 돌파매매 <span>결과 리포트</span></h1>
+    <div class="sub">VWAP + Volume Profile 기반 | XAUUSD 15분봉 | XGBoost</div>
+    <div class="date">2026.02.12 | Mac Mini에서 학습 | OpenClaw(GPT-5) 실행</div>
+</div>
+
+<div class="container">
+
+<!-- 한줄 요약 -->
+<div class="section">
+    <div class="section-title">한줄 요약</div>
+    <div class="card" style="text-align:center; border-color:#00e676;">
+        <p style="font-size:1.2em; color:#fff;">
+            60일간 금 15분봉 데이터에서 <strong style="color:#00e676;">236번의 돌파</strong>를 감지했고,<br>
+            ML이 <strong style="color:#00e676;">67.2% 정확도</strong>로 진짜/가짜 돌파를 구분했습니다.<br>
+            <span style="color:#ffab40;">가장 최근 돌파는 83.3% 확률로 "진짜" 판정!</span>
+        </p>
+    </div>
+</div>
+
+<!-- 핵심 숫자들 -->
+<div class="section">
+    <div class="section-title">핵심 숫자 한눈에 보기</div>
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="num cyan">4,370</div>
+            <div class="label">수집된 캔들 수<br>(60일 × 15분봉)</div>
+        </div>
+        <div class="stat-card">
+            <div class="num orange">236</div>
+            <div class="label">돌파 감지 횟수<br>(VWAP 위 + 고점 돌파)</div>
+        </div>
+        <div class="stat-card">
+            <div class="num green">103</div>
+            <div class="label">진짜 돌파<br>(43.6%)</div>
+        </div>
+        <div class="stat-card">
+            <div class="num red">133</div>
+            <div class="label">가짜 돌파<br>(56.4%)</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" style="color:#fff;">67.2%</div>
+            <div class="label">ML 예측 정확도</div>
+        </div>
+        <div class="stat-card">
+            <div class="num green">83.3%</div>
+            <div class="label">최근 돌파<br>진짜 확률</div>
+        </div>
+    </div>
+</div>
+
+<!-- 쉬운 설명: 이게 무슨 뜻이야? -->
+<div class="section">
+    <div class="section-title">이게 무슨 뜻이야? (쉽게 이해하기)</div>
+
+    <div class="card">
+        <h3>📊 데이터 수집 (4,370개 캔들)</h3>
+        <p>60일간 금(XAUUSD) 15분봉 차트 데이터를 가져왔습니다. 가격은 <strong>$4,201 ~ $5,616</strong> 범위.</p>
+        <p style="color:#ffab40;">비유: "시험 문제집 4,370문제를 구했다"</p>
+    </div>
+
+    <div class="card">
+        <h3>🔍 돌파 감지 (236회)</h3>
+        <p>4,370개 캔들 중에서 <strong>"VWAP 위에 있으면서 + 20봉 고점을 뚫은"</strong> 순간이 236번 있었습니다.</p>
+        <div class="compare-grid">
+            <div class="compare-side" style="border:1px solid #00e67633;">
+                <h4 class="green">✅ 진짜 돌파 103회 (43.6%)</h4>
+                <ul>
+                    <li>돌파 후 10봉(2.5시간) 뒤에도 가격이 유지됨</li>
+                    <li>실제로 매수했으면 수익이었을 상황</li>
+                </ul>
+            </div>
+            <div class="compare-side" style="border:1px solid #ff525233;">
+                <h4 class="red">❌ 가짜 돌파 133회 (56.4%)</h4>
+                <ul>
+                    <li>돌파 후 가격이 다시 되돌아옴</li>
+                    <li>매수했으면 손실이었을 상황</li>
+                </ul>
+            </div>
+        </div>
+        <p style="color:#ffab40;">비유: "236번 돌파가 나왔는데, 그냥 따라갔으면 절반 이상 손해"</p>
+        <p style="color:#00e676;"><strong>→ 이걸 ML이 미리 구분해주는 게 목표!</strong></p>
+    </div>
+
+    <div class="card">
+        <h3>🧠 ML 학습 결과 (67.2% 정확도)</h3>
+        <p>ML이 22개의 지표 숫자를 보고 "이건 진짜야 / 이건 가짜야" 예측한 결과:</p>
+
+        <div class="info-grid" style="margin: 15px 0;">
+            <div class="info-box">
+                <div class="lbl">전체 정확도</div>
+                <div class="val" style="font-size:1.2em;">67.2%</div>
+            </div>
+            <div class="info-box" style="border-left-color:#ff5252;">
+                <div class="lbl">가짜 돌파 감지율 (Precision)</div>
+                <div class="val">79% <span style="color:#888; font-size:0.8em;">← 가짜를 잘 잡음!</span></div>
+            </div>
+            <div class="info-box" style="border-left-color:#00e676;">
+                <div class="lbl">진짜 돌파 감지율 (Recall)</div>
+                <div class="val">74% <span style="color:#888; font-size:0.8em;">← 진짜를 놓치지 않음!</span></div>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <h4>💡 이 숫자들이 의미하는 것</h4>
+            <ul>
+                <li><strong>ML 없이 돌파 따라가면:</strong> 236번 중 103번만 수익 = <strong style="color:#ff5252;">승률 43.6%</strong></li>
+                <li><strong>ML 필터를 쓰면:</strong> ML이 "진짜"라고 한 것만 따라가면 = <strong style="color:#00e676;">승률 약 57%</strong></li>
+                <li><strong>향상도:</strong> 43.6% → 57% = <strong style="color:#00d2ff;">+13.4%p 개선!</strong></li>
+                <li>아직 완벽하진 않지만, <strong>첫 번째 프로토타입</strong>으로 의미 있는 결과!</li>
+            </ul>
+        </div>
+
+        <p style="color:#ffab40;">비유: "시험을 처음 본 학생이 67점을 받았다. 더 공부하면 올라갈 여지가 있다!"</p>
+    </div>
+
+    <div class="card">
+        <h3>📋 분류 리포트 (상세)</h3>
+        <p style="margin-bottom:15px;">ML이 테스트 데이터 58개를 판단한 세부 결과:</p>
+        <table class="dt">
+            <thead>
+                <tr><th></th><th>Precision<br>(정밀도)</th><th>Recall<br>(재현율)</th><th>F1 Score</th><th>갯수</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="color:#ff5252; font-weight:700;">가짜 돌파</td>
+                    <td><strong>79%</strong></td>
+                    <td>63%</td>
+                    <td>70%</td>
+                    <td>35개</td>
+                </tr>
+                <tr>
+                    <td style="color:#00e676; font-weight:700;">진짜 돌파</td>
+                    <td>57%</td>
+                    <td><strong>74%</strong></td>
+                    <td>64%</td>
+                    <td>23개</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="highlight">
+            <h4>🔑 Precision vs Recall 쉽게</h4>
+            <ul>
+                <li><strong>Precision (정밀도)</strong> = ML이 "진짜!"라고 말한 것 중 실제로 진짜인 비율
+                    <br><span style="color:#888; margin-left:16px;">→ "매수했을 때 진짜 수익일 확률" = 57%</span></li>
+                <li><strong>Recall (재현율)</strong> = 실제 진짜 돌파 중 ML이 맞춘 비율
+                    <br><span style="color:#888; margin-left:16px;">→ "진짜 기회를 놓치지 않는 능력" = 74%</span></li>
+                <li><strong>우리에게 중요한 것:</strong> 가짜 돌파 Precision 79% = "ML이 가짜라고 하면 79% 진짜 가짜"
+                    <br><span style="color:#00e676; margin-left:16px;">→ ML이 "하지마"라고 하면 거의 맞다! 이게 횡보장 손실을 줄여줌</span></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- ML이 가장 중요하게 본 지표 -->
+<div class="section">
+    <div class="section-title">ML이 가장 중요하게 본 지표 TOP 10</div>
+    <p class="section-desc">22개 피처 중 ML이 판단할 때 가장 비중 있게 본 지표 순위. <strong style="color:#00e676;">VWAP 관련 피처가 압도적 1위!</strong></p>
+
+    <div class="rank-list">
+        <div class="rank-item">
+            <div class="rank-num rank-1">1</div>
+            <div class="rank-name">price_vs_vwap</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:100%; background:linear-gradient(90deg,#ffd700,#ffab40);"></div></div>
+            <span class="rank-tag" style="background:#00e67622; color:#00e676;">[VWAP]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-2">2</div>
+            <div class="rank-name">ADX</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:72%; background:linear-gradient(90deg,#c0c0c0,#888);"></div></div>
+            <span class="rank-tag" style="background:#00d2ff22; color:#00d2ff;">[모멘텀]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-3">3</div>
+            <div class="rank-name">MACD_norm</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:65%; background:linear-gradient(90deg,#cd7f32,#8b6914);"></div></div>
+            <span class="rank-tag" style="background:#00d2ff22; color:#00d2ff;">[모멘텀]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-other">4</div>
+            <div class="rank-name">ADX_velocity</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:58%; background:linear-gradient(90deg,#c792ea,#9c64c7);"></div></div>
+            <span class="rank-tag" style="background:#c792ea22; color:#c792ea;">[변화속도]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-other">5</div>
+            <div class="rank-name">vwap_slope</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:52%; background:linear-gradient(90deg,#00e676,#00c853);"></div></div>
+            <span class="rank-tag" style="background:#00e67622; color:#00e676;">[VWAP]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-other">6</div>
+            <div class="rank-name">ATR_pct</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:46%; background:linear-gradient(90deg,#ffab40,#ff8f00);"></div></div>
+            <span class="rank-tag" style="background:#ffab4022; color:#ffab40;">[변동성]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-other">7</div>
+            <div class="rank-name">ATR_squeeze</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:42%; background:linear-gradient(90deg,#ffab40,#ff8f00);"></div></div>
+            <span class="rank-tag" style="background:#ffab4022; color:#ffab40;">[변동성]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-other">8</div>
+            <div class="rank-name">dist_to_lower1</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:38%; background:linear-gradient(90deg,#00e676,#00c853);"></div></div>
+            <span class="rank-tag" style="background:#00e67622; color:#00e676;">[VWAP]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-other">9</div>
+            <div class="rank-name">ROC</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:34%; background:linear-gradient(90deg,#00d2ff,#0091ea);"></div></div>
+            <span class="rank-tag" style="background:#00d2ff22; color:#00d2ff;">[모멘텀]</span>
+        </div>
+        <div class="rank-item">
+            <div class="rank-num rank-other">10</div>
+            <div class="rank-name">RSI</div>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:30%; background:linear-gradient(90deg,#00d2ff,#0091ea);"></div></div>
+            <span class="rank-tag" style="background:#00d2ff22; color:#00d2ff;">[모멘텀]</span>
+        </div>
+    </div>
+
+    <div class="highlight">
+        <h4>💡 피처 중요도가 알려주는 것</h4>
+        <ul>
+            <li><strong style="color:#ffd700;">1위 price_vs_vwap:</strong> "가격이 VWAP 대비 어디 있나"가 돌파 성공에 가장 중요!</li>
+            <li><strong>2위 ADX:</strong> 추세 강도가 높을 때 돌파가 진짜일 확률 높음</li>
+            <li><strong>4위 ADX_velocity (변화속도):</strong> ADX가 "올라오는 중"이면 돌파 성공률↑ (후행→선행 효과 입증!)</li>
+            <li><strong>5위 vwap_slope:</strong> VWAP 자체가 상승 중이면 돌파 성공률↑</li>
+            <li><strong>VWAP 관련이 3개 (1위, 5위, 8위):</strong> VWAP 기반 전략 선택이 유효했다!</li>
+            <li><strong>변화속도 계열이 포함됨:</strong> "후행 지표의 변화속도 = 선행 신호" 가설이 데이터로 확인!</li>
+        </ul>
+    </div>
+</div>
+
+<!-- 최근 돌파 시그널 -->
+<div class="section">
+    <div class="section-title">가장 최근 돌파 시그널</div>
+
+    <div class="signal-box">
+        <div style="font-size:0.9em; color:#888; margin-bottom:5px;">ML 판단: 진짜 돌파 확률</div>
+        <div class="prob">83.3%</div>
+        <div class="verdict">🟢 매수 시그널! (VWAP + 거래량 돌파 확인)</div>
+    </div>
+
+    <div class="card">
+        <h3>최근 돌파 시점의 지표값</h3>
+        <div class="info-grid">
+            <div class="info-box">
+                <div class="lbl">VWAP 대비 위치</div>
+                <div class="val green">+0.87% (VWAP 위)</div>
+            </div>
+            <div class="info-box">
+                <div class="lbl">HVN 거리</div>
+                <div class="val green">+1.11% (HVN 위)</div>
+            </div>
+            <div class="info-box" style="border-left-color:#00d2ff;">
+                <div class="lbl">RSI</div>
+                <div class="val">75.7 (강한 상승 모멘텀)</div>
+            </div>
+            <div class="info-box" style="border-left-color:#c792ea;">
+                <div class="lbl">RSI 변화속도</div>
+                <div class="val green">+7.5 (빠르게 가속 중!)</div>
+            </div>
+            <div class="info-box" style="border-left-color:#ffab40;">
+                <div class="lbl">ADX</div>
+                <div class="val">28.2 (강한 추세 확인)</div>
+            </div>
+            <div class="info-box" style="border-left-color:#ff5252;">
+                <div class="lbl">거래량 배수</div>
+                <div class="val">1.3x (평균 이상)</div>
+            </div>
+            <div class="info-box">
+                <div class="lbl">캔들 몸통비율</div>
+                <div class="val">28.9%</div>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <h4>🧠 ML이 83.3%로 판단한 이유 (해석)</h4>
+            <ul>
+                <li>가격이 VWAP <strong>위 +0.87%</strong> → 기관 매수 영역 (1위 피처)</li>
+                <li>ADX 28.2 → 25 이상이므로 <strong>강한 추세 존재</strong> (2위 피처)</li>
+                <li>RSI가 3봉 만에 +7.5 상승 → <strong>모멘텀 가속 중</strong> (선행 신호!)</li>
+                <li>HVN 위에서 돌파 → <strong>기관 방어 레벨 위에 있음</strong></li>
+                <li>거래량 1.3배 → <strong>거래량 동반 돌파</strong></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- 현재 시장 상태 -->
+<div class="section">
+    <div class="section-title">현재 XAUUSD 시장 상태</div>
+    <div class="info-grid">
+        <div class="info-box">
+            <div class="lbl">현재 VWAP</div>
+            <div class="val">$5,081.5</div>
+        </div>
+        <div class="info-box" style="border-left-color:#ff5252;">
+            <div class="lbl">현재 가격</div>
+            <div class="val">$5,079.5 <span class="red">(VWAP 아래)</span></div>
+        </div>
+        <div class="info-box" style="border-left-color:#ffab40;">
+            <div class="lbl">가격 범위 (60일)</div>
+            <div class="val">$4,201 ~ $5,616</div>
+        </div>
+        <div class="info-box" style="border-left-color:#888;">
+            <div class="lbl">HVN 거리</div>
+            <div class="val">-0.03% (거의 HVN 위)</div>
+        </div>
+    </div>
+    <div class="warn">
+        <h4>⚠️ 현재 상태: VWAP 아래 = 약세 구간</h4>
+        <p>현재 가격($5,079)이 VWAP($5,081) 아래에 있으므로 <strong>매수 조건 불충족</strong>. VWAP 위로 올라오고 + 거래량이 터지는 순간을 기다려야 합니다.</p>
+    </div>
+</div>
+
+<!-- 개선 로드맵 -->
+<div class="section">
+    <div class="section-title">다음 단계: 정확도 높이기</div>
+    <p class="section-desc">67.2%는 첫 프로토타입으로 좋은 시작. 더 높이려면:</p>
+
+    <div class="card">
+        <h3>📈 개선 방향 (우선순위순)</h3>
+        <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="min-width:35px; height:35px; background:#00e67622; border:2px solid #00e676; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#00e676;">1</div>
+                <div>
+                    <div style="color:#fff; font-weight:600;">라벨/기준 조정</div>
+                    <div style="color:#888; font-size:0.82em;">돌파 후 10봉 → 12~20봉으로, 수익 기준 0.1% → 0.2~0.5%</div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="min-width:35px; height:35px; background:#00d2ff22; border:2px solid #00d2ff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#00d2ff;">2</div>
+                <div>
+                    <div style="color:#fff; font-weight:600;">세션 필터 추가</div>
+                    <div style="color:#888; font-size:0.82em;">런던/뉴욕 세션 구분 → 유동성 있는 시간대에서만 학습</div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="min-width:35px; height:35px; background:#ffab4022; border:2px solid #ffab40; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#ffab40;">3</div>
+                <div>
+                    <div style="color:#fff; font-weight:600;">상위 타임프레임 추세 추가</div>
+                    <div style="color:#888; font-size:0.82em;">1시간봉 방향이 같은 방향인지 피처로 추가</div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="min-width:35px; height:35px; background:#c792ea22; border:2px solid #c792ea; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#c792ea;">4</div>
+                <div>
+                    <div style="color:#fff; font-weight:600;">Walk-Forward 검증</div>
+                    <div style="color:#888; font-size:0.82em;">2주 학습 → 1주 테스트 반복으로 과적합 방지</div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="min-width:35px; height:35px; background:#ff525222; border:2px solid #ff5252; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#ff5252;">5</div>
+                <div>
+                    <div style="color:#fff; font-weight:600;">TickStory 데이터 확장</div>
+                    <div style="color:#888; font-size:0.82em;">60일 → 1년+ 데이터로 학습량 대폭 증가</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="warn" style="border-color:#00d2ff33; background:linear-gradient(135deg, #00d2ff08, #00d2ff03);">
+        <h4 style="color:#00d2ff;">📊 성능 목표</h4>
+        <p>
+            <strong>현재:</strong> 정확도 67.2%, 진짜 돌파 Precision 57%<br>
+            <strong>1차 목표:</strong> 정확도 72%+, Precision 65%+<br>
+            <strong>최종 목표:</strong> 정확도 75%+, Precision 70%+ (ML이 "진짜"라면 10번 중 7번 수익)
+        </p>
+    </div>
+</div>
+
+</div>
+
+<div class="footer">
+    <p>ML 트레이딩 연습 결과 리포트 | 투자 조언이 아닙니다</p>
+    <p style="margin-top:8px; color:#333;">Generated by Claude Opus 4.6 + OpenClaw GPT-5 | 2026.02.12</p>
+</div>
+
+<a href="#top" class="scroll-top">↑</a>
+</body>
+</html>

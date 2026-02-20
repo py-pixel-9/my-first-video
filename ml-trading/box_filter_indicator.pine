@@ -1,0 +1,216 @@
+// Box Range Filter v1.1
+// 5분봉 돌파매매 EA용 1H 필터 지표
+// 박스권 감지 + 돌파 즉시 반응
+//
+// 사용법: XAUUSD 1H 차트에 적용
+// - 배경 초록 = EA ON (매매 허용)
+// - 배경 빨강 = EA OFF (박스권, 매매 중지)
+
+//@version=6
+indicator("Box Range Filter v1.1", overlay=true, max_bars_back=500)
+
+// ============================================================
+// INPUTS
+// ============================================================
+grp_range = "Range Box (Primary Filter)"
+range_len       = input.int(20, "Range 계산 기간", minval=5, maxval=100, group=grp_range)
+atr_norm_len    = input.int(50, "ATR 정규화 기간", minval=10, maxval=200, group=grp_range)
+range_threshold = input.float(1.5, "박스권 임계값", minval=0.5, maxval=5.0, step=0.1, group=grp_range)
+atr_min_mult    = input.float(0.5, "ATR 최소 배수", minval=0.1, maxval=2.0, step=0.1, group=grp_range)
+
+grp_atr = "Filter 1: ATR (변동성)"
+use_atr_filter  = input.bool(true, "ATR 필터 사용", group=grp_atr)
+atr_period      = input.int(14, "ATR 기간", minval=1, group=grp_atr)
+atr_avg_period  = input.int(50, "ATR 평균 기간", minval=10, group=grp_atr)
+atr_mult        = input.float(0.75, "ATR 임계 배수", minval=0.1, maxval=1.5, step=0.05, group=grp_atr)
+
+grp_adx = "Filter 2: ADX (추세 강도)"
+use_adx_filter  = input.bool(true, "ADX 필터 사용", group=grp_adx)
+adx_period      = input.int(14, "ADX 기간", minval=1, group=grp_adx)
+adx_threshold   = input.float(18, "ADX 임계값", minval=5, maxval=40, step=1, group=grp_adx)
+
+grp_bbw = "Filter 3: BBW (밴드 폭)"
+use_bbw_filter  = input.bool(true, "BBW 필터 사용", group=grp_bbw)
+bb_period       = input.int(20, "BB 기간", minval=5, group=grp_bbw)
+bb_std          = input.float(2.0, "BB 표준편차", minval=0.5, maxval=4.0, step=0.1, group=grp_bbw)
+bbw_avg_period  = input.int(50, "BBW 평균 기간", minval=10, group=grp_bbw)
+bbw_mult        = input.float(0.65, "BBW 임계 배수", minval=0.1, maxval=1.5, step=0.05, group=grp_bbw)
+
+grp_vote = "투표 설정"
+min_votes       = input.int(2, "최소 통과 수", minval=1, maxval=3, group=grp_vote)
+
+grp_display = "표시 설정"
+show_range_box  = input.bool(true, "Range 박스 표시", group=grp_display)
+show_breakout   = input.bool(true, "돌파 신호 표시", group=grp_display)
+show_bg         = input.bool(true, "배경색 표시", group=grp_display)
+
+// ============================================================
+// RANGE BOX CALCULATION (Primary)
+// ============================================================
+range_high = ta.highest(high, range_len)
+range_low  = ta.lowest(low, range_len)
+range_size = range_high - range_low
+
+atr_norm    = ta.atr(atr_norm_len)
+range_ratio = atr_norm > 0 ? range_size / atr_norm : 0.0
+
+is_box_range = range_ratio < range_threshold
+
+// 돌파 감지
+prev_high     = ta.highest(high, range_len)[1]
+prev_low      = ta.lowest(low, range_len)[1]
+breakout_up   = close > prev_high and barstate.isconfirmed
+breakout_down = close < prev_low and barstate.isconfirmed
+is_breakout   = breakout_up or breakout_down
+
+// ATR 최소 기준
+atr_14     = ta.atr(14)
+atr_14_avg = ta.sma(atr_14, atr_avg_period)
+atr_alive  = atr_14 > atr_14_avg * atr_min_mult
+
+primary_on = (not is_box_range or is_breakout) and atr_alive
+
+// ============================================================
+// SECONDARY FILTERS (ATR + ADX + BBW)
+// ============================================================
+
+// Filter 1: ATR
+atr_val  = ta.atr(atr_period)
+atr_avg  = ta.sma(atr_val, atr_avg_period)
+atr_pass = not use_atr_filter or (atr_val > atr_avg * atr_mult)
+
+// Filter 2: ADX (직접 계산)
+up_move   = ta.change(high)
+down_move = -ta.change(low)
+plus_dm   = na(up_move) ? 0.0 : (up_move > down_move and up_move > 0 ? up_move : 0.0)
+minus_dm  = na(down_move) ? 0.0 : (down_move > up_move and down_move > 0 ? down_move : 0.0)
+atr_adx   = ta.atr(adx_period)
+plus_di   = atr_adx > 0 ? 100 * ta.rma(plus_dm, adx_period) / atr_adx : 0.0
+minus_di  = atr_adx > 0 ? 100 * ta.rma(minus_dm, adx_period) / atr_adx : 0.0
+di_sum    = plus_di + minus_di
+dx        = di_sum > 0 ? 100 * math.abs(plus_di - minus_di) / di_sum : 0.0
+adx_val   = ta.rma(dx, adx_period)
+adx_pass  = not use_adx_filter or (adx_val > adx_threshold)
+
+// Filter 3: BBW
+bb_mid    = ta.sma(close, bb_period)
+bb_dev    = bb_std * ta.stdev(close, bb_period)
+bb_upper  = bb_mid + bb_dev
+bb_lower  = bb_mid - bb_dev
+bbw_val   = bb_mid > 0 ? (bb_upper - bb_lower) / bb_mid * 100 : 0.0
+bbw_avg   = ta.sma(bbw_val, bbw_avg_period)
+bbw_pass  = not use_bbw_filter or (bbw_val > bbw_avg * bbw_mult)
+
+// 투표
+vote_count   = (atr_pass ? 1 : 0) + (adx_pass ? 1 : 0) + (bbw_pass ? 1 : 0)
+secondary_on = vote_count >= min_votes
+
+// ============================================================
+// FINAL
+// ============================================================
+ea_on = primary_on and secondary_on
+
+// ============================================================
+// ALERTS (봉 마감 시 상태 변경 감지)
+// ============================================================
+turned_on  = ea_on and not ea_on[1]
+turned_off = not ea_on and ea_on[1]
+
+if turned_on and barstate.isconfirmed
+    alert("EA ON | Filters: " + str.tostring(vote_count) + "/3 | Range: $" + str.tostring(range_size, "#.##") + " | Ratio: " + str.tostring(range_ratio, "#.##"), alert.freq_once_per_bar_close)
+
+if turned_off and barstate.isconfirmed
+    alert("EA OFF | Filters: " + str.tostring(vote_count) + "/3 | Range: $" + str.tostring(range_size, "#.##") + " | Ratio: " + str.tostring(range_ratio, "#.##"), alert.freq_once_per_bar_close)
+
+if breakout_up
+    alert("BREAKOUT UP | $" + str.tostring(close, "#.##") + " > Range High $" + str.tostring(prev_high, "#.##"), alert.freq_once_per_bar_close)
+
+if breakout_down
+    alert("BREAKOUT DOWN | $" + str.tostring(close, "#.##") + " < Range Low $" + str.tostring(prev_low, "#.##"), alert.freq_once_per_bar_close)
+
+// ============================================================
+// PLOTTING
+// ============================================================
+
+// Range Box
+p_rh = plot(show_range_box ? range_high : na, "Range High", color=color.new(#42a5f5, 60), linewidth=1, style=plot.style_stepline)
+p_rl = plot(show_range_box ? range_low : na, "Range Low", color=color.new(#42a5f5, 60), linewidth=1, style=plot.style_stepline)
+
+range_fill_color = is_box_range ? color.new(#ef5350, 90) : color.new(#26a69a, 93)
+fill(p_rh, p_rl, color=range_fill_color, title="Range Fill")
+
+// 돌파 신호
+plotshape(show_breakout and breakout_up, "Breakout Up", shape.triangleup, location.belowbar, color.new(#26a69a, 0), size=size.small)
+plotshape(show_breakout and breakout_down, "Breakout Down", shape.triangledown, location.abovebar, color.new(#ef5350, 0), size=size.small)
+
+// 배경색
+bg_color = show_bg ? (ea_on ? color.new(#26a69a, 92) : color.new(#ef5350, 95)) : na
+bgcolor(bg_color, title="EA Status BG")
+
+// ============================================================
+// INFO TABLE
+// ============================================================
+var table info = table.new(position.top_right, 2, 12, bgcolor=color.new(#1e222d, 10), frame_color=color.new(#363c4e, 0), frame_width=1, border_color=color.new(#363c4e, 0), border_width=1)
+
+if barstate.islast
+    table.cell(info, 0, 0, "Box Filter", text_color=color.gray, text_size=size.small)
+    ea_label = ea_on ? "EA ON" : "EA OFF"
+    ea_color = ea_on ? color.green : color.red
+    table.cell(info, 1, 0, ea_label, text_color=ea_color, text_size=size.small)
+
+    table.cell(info, 0, 1, "Range", text_color=color.gray, text_size=size.small)
+    table.cell(info, 1, 1, "$" + str.tostring(range_size, "#.##"), text_color=color.white, text_size=size.small)
+
+    table.cell(info, 0, 2, "Ratio", text_color=color.gray, text_size=size.small)
+    ratio_str = str.tostring(range_ratio, "#.##") + " / " + str.tostring(range_threshold, "#.#")
+    ratio_color = range_ratio >= range_threshold ? color.green : color.red
+    table.cell(info, 1, 2, ratio_str, text_color=ratio_color, text_size=size.small)
+
+    table.cell(info, 0, 3, "Box?", text_color=color.gray, text_size=size.small)
+    box_str = is_box_range ? "YES" : "NO"
+    box_color = is_box_range ? color.red : color.green
+    table.cell(info, 1, 3, box_str, text_color=box_color, text_size=size.small)
+
+    table.cell(info, 0, 4, "Filters", text_color=color.gray, text_size=size.small)
+    vote_str = str.tostring(vote_count) + "/3 pass"
+    vote_color = secondary_on ? color.green : color.red
+    table.cell(info, 1, 4, vote_str, text_color=vote_color, text_size=size.small)
+
+    table.cell(info, 0, 5, "ATR", text_color=color.gray, text_size=size.small)
+    atr_thr = atr_avg * atr_mult
+    atr_str = str.tostring(atr_val, "#.##") + " / " + str.tostring(atr_thr, "#.##")
+    atr_color = atr_pass ? color.green : color.red
+    table.cell(info, 1, 5, atr_str, text_color=atr_color, text_size=size.small)
+
+    table.cell(info, 0, 6, "ADX", text_color=color.gray, text_size=size.small)
+    adx_str = str.tostring(adx_val, "#.#") + " / " + str.tostring(adx_threshold, "#")
+    adx_color = adx_pass ? color.green : color.red
+    table.cell(info, 1, 6, adx_str, text_color=adx_color, text_size=size.small)
+
+    table.cell(info, 0, 7, "BBW", text_color=color.gray, text_size=size.small)
+    bbw_thr = bbw_avg * bbw_mult
+    bbw_str = str.tostring(bbw_val, "#.##") + " / " + str.tostring(bbw_thr, "#.##")
+    bbw_color = bbw_pass ? color.green : color.red
+    table.cell(info, 1, 7, bbw_str, text_color=bbw_color, text_size=size.small)
+
+    table.cell(info, 0, 8, "Primary", text_color=color.gray, text_size=size.small)
+    pri_str = primary_on ? "PASS" : "FAIL"
+    pri_color = primary_on ? color.green : color.red
+    table.cell(info, 1, 8, pri_str, text_color=pri_color, text_size=size.small)
+
+    table.cell(info, 0, 9, "Second", text_color=color.gray, text_size=size.small)
+    sec_str = secondary_on ? "PASS" : "FAIL"
+    sec_color = secondary_on ? color.green : color.red
+    table.cell(info, 1, 9, sec_str, text_color=sec_color, text_size=size.small)
+
+    table.cell(info, 0, 10, "FINAL", text_color=color.white, text_size=size.small)
+    final_bg = ea_on ? color.new(#26a69a, 30) : color.new(#ef5350, 30)
+    table.cell(info, 1, 10, ea_label, bgcolor=final_bg, text_color=color.white, text_size=size.small)
+
+// ============================================================
+// ALERT CONDITIONS (수동 알람 설정용)
+// ============================================================
+alertcondition(turned_on, "EA ON (수동)", "Box Filter: EA ON")
+alertcondition(turned_off, "EA OFF (수동)", "Box Filter: EA OFF")
+alertcondition(breakout_up, "Breakout Up (수동)", "Range Breakout UP")
+alertcondition(breakout_down, "Breakout Down (수동)", "Range Breakout DOWN")

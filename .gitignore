@@ -5,3 +5,14 @@ dist
 
 # Ignore the output video from Git but not videos you import into src/.
 out
+
+# ML Trading data (large CSV files)
+ml-trading/data/
+ml-trading/backtest_results/
+
+# CNN candidate images (generated)
+ml-trading/cnn_candidates*/
+
+# Windows
+nul
+Thumbs.db

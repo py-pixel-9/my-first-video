@@ -1,0 +1,187 @@
+// This Pine Script(TM) v5 strategy code is subject to the Terms of Usage at https://www.tradingview.com/pine-script-docs/
+// Supertrend + EMA Cross + ADX Filter Strategy
+// Timeframe: 90min (1.5H) | Pair: BTCUSDT Perpetual
+// Backtest optimized: 2024-2025 | Risk-based position sizing
+
+//@version=5
+strategy("ST+EMA+ADX v1.0",
+     overlay=true,
+     initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=100,
+     commission_type=strategy.commission.percent,
+     commission_value=0.06,
+     slippage=1,
+     currency=currency.USD,
+     process_orders_on_close=false,
+     calc_on_every_tick=false,
+     max_bars_back=500)
+
+// ============================================================
+// INPUTS
+// ============================================================
+grp_st = "Supertrend"
+st_period   = input.int(10, "ATR Period", minval=1, group=grp_st)
+st_mult     = input.float(3.0, "Multiplier", minval=0.1, step=0.1, group=grp_st)
+
+grp_ema = "EMA Cross"
+ema_fast    = input.int(20, "Fast EMA", minval=1, group=grp_ema)
+ema_slow    = input.int(50, "Slow EMA", minval=1, group=grp_ema)
+
+grp_adx = "ADX Filter"
+adx_period  = input.int(14, "ADX Period", minval=1, group=grp_adx)
+adx_thresh  = input.float(20.0, "ADX Threshold", minval=0, step=1, group=grp_adx)
+use_adx     = input.bool(true, "Use ADX Filter", group=grp_adx)
+
+grp_risk = "Risk Management"
+sl_mult     = input.float(1.5, "SL Multiplier (ATR x)", minval=0.1, step=0.1, group=grp_risk)
+tp_mult     = input.float(6.0, "TP Multiplier (ATR x)", minval=0.1, step=0.1, group=grp_risk)
+risk_pct    = input.float(5.0, "Risk % per Trade", minval=0.1, step=0.5, group=grp_risk, tooltip="Percentage of equity risked per trade")
+
+grp_alert = "Alerts (Python Bot)"
+use_alerts  = input.bool(true, "Enable Alert Messages", group=grp_alert)
+
+// ============================================================
+// INDICATORS
+// ============================================================
+
+// --- Supertrend ---
+[st_line, st_dir] = ta.supertrend(st_mult, st_period)
+
+// Supertrend direction change signals
+st_buy  = st_dir[1] > 0 and st_dir <= 0   // changed to bullish (dir: -1=bull, 1=bear in TV)
+st_sell = st_dir[1] < 0 and st_dir >= 0   // changed to bearish
+
+// Note: TradingView supertrend direction is opposite to custom calc
+// dir < 0 = uptrend (bullish), dir > 0 = downtrend (bearish)
+// But ta.supertrend returns: -1 = uptrend, 1 = downtrend
+// So: st_dir == -1 means bullish, st_dir == 1 means bearish
+// Buy signal: st_dir changes from 1 to -1
+// Sell signal: st_dir changes from -1 to 1
+
+// --- EMA Cross ---
+ema_f = ta.ema(close, ema_fast)
+ema_s = ta.ema(close, ema_slow)
+ema_bull = ema_f > ema_s
+ema_bear = ema_f < ema_s
+
+// --- ADX (Wilder's method) ---
+[di_plus, di_minus, adx_val] = ta.dmi(adx_period, adx_period)
+adx_ok = not use_adx or adx_val >= adx_thresh
+
+// --- ATR for SL/TP ---
+atr_val = ta.atr(st_period)
+
+// ============================================================
+// ENTRY CONDITIONS
+// ============================================================
+long_signal  = st_buy and ema_bull and adx_ok
+short_signal = st_sell and ema_bear and adx_ok
+
+// ============================================================
+// POSITION SIZING (Risk-based)
+// ============================================================
+// Calculate position size based on risk %
+// risk_amount = equity * risk_pct / 100
+// sl_distance = atr * sl_mult
+// position_size = risk_amount / sl_distance
+// qty (in contracts/coins) = position_size
+
+calc_qty(float entry_price, float sl_distance) =>
+    risk_amount = strategy.equity * (risk_pct / 100.0)
+    qty = risk_amount / sl_distance
+    qty
+
+// ============================================================
+// TRADE EXECUTION
+// ============================================================
+var float entry_price = na
+var float sl_price = na
+var float tp_price = na
+
+// Close existing position before opening opposite
+if long_signal and strategy.position_size < 0
+    strategy.close("Short", comment="Close Short -> Long")
+if short_signal and strategy.position_size > 0
+    strategy.close("Long", comment="Close Long -> Short")
+
+// LONG Entry
+if long_signal and strategy.position_size <= 0
+    sl_dist = atr_val * sl_mult
+    tp_dist = atr_val * tp_mult
+    entry_price := close
+    sl_price := close - sl_dist
+    tp_price := close + tp_dist
+    qty = calc_qty(close, sl_dist)
+
+    strategy.entry("Long", strategy.long, qty=qty, comment="LONG")
+    strategy.exit("Long Exit", "Long", stop=sl_price, limit=tp_price, comment_profit="TP", comment_loss="SL")
+
+    // Alert for Python bot
+    if use_alerts
+        alert_msg = '{"signal":"LONG","entry":' + str.tostring(close, "#.##") + ',"sl":' + str.tostring(sl_price, "#.##") + ',"tp":' + str.tostring(tp_price, "#.##") + ',"atr":' + str.tostring(atr_val, "#.##") + ',"adx":' + str.tostring(adx_val, "#.##") + ',"qty":' + str.tostring(qty, "#.####") + ',"risk_pct":' + str.tostring(risk_pct) + '}'
+        alert(alert_msg, alert.freq_once_per_bar_close)
+
+// SHORT Entry
+if short_signal and strategy.position_size >= 0
+    sl_dist = atr_val * sl_mult
+    tp_dist = atr_val * tp_mult
+    entry_price := close
+    sl_price := close + sl_dist
+    tp_price := close - tp_dist
+    qty = calc_qty(close, sl_dist)
+
+    strategy.entry("Short", strategy.short, qty=qty, comment="SHORT")
+    strategy.exit("Short Exit", "Short", stop=sl_price, limit=tp_price, comment_profit="TP", comment_loss="SL")
+
+    if use_alerts
+        alert_msg = '{"signal":"SHORT","entry":' + str.tostring(close, "#.##") + ',"sl":' + str.tostring(sl_price, "#.##") + ',"tp":' + str.tostring(tp_price, "#.##") + ',"atr":' + str.tostring(atr_val, "#.##") + ',"adx":' + str.tostring(adx_val, "#.##") + ',"qty":' + str.tostring(qty, "#.####") + ',"risk_pct":' + str.tostring(risk_pct) + '}'
+        alert(alert_msg, alert.freq_once_per_bar_close)
+
+// ============================================================
+// PLOTTING
+// ============================================================
+
+// Supertrend line
+st_color = st_dir < 0 ? color.new(#26a69a, 0) : color.new(#ef5350, 0)
+plot(st_line, "Supertrend", color=st_color, linewidth=2)
+
+// EMA lines
+plot(ema_f, "EMA Fast", color=color.new(#42a5f5, 30), linewidth=1)
+plot(ema_s, "EMA Slow", color=color.new(#ffa726, 30), linewidth=1)
+
+// Entry signals
+plotshape(long_signal, "Long Signal", shape.triangleup, location.belowbar, color.new(#26a69a, 0), size=size.small)
+plotshape(short_signal, "Short Signal", shape.triangledown, location.abovebar, color.new(#ef5350, 0), size=size.small)
+
+// SL/TP levels (only when in position)
+plot(strategy.position_size > 0 ? sl_price : na, "Long SL", color=color.new(#ef5350, 50), style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size > 0 ? tp_price : na, "Long TP", color=color.new(#26a69a, 50), style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size < 0 ? sl_price : na, "Short SL", color=color.new(#ef5350, 50), style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size < 0 ? tp_price : na, "Short TP", color=color.new(#26a69a, 50), style=plot.style_linebr, linewidth=1)
+
+// Background: ADX filter active zone
+bgcolor(adx_val >= adx_thresh ? color.new(#26a69a, 95) : na, title="ADX Active Zone")
+
+// ============================================================
+// INFO TABLE
+// ============================================================
+var table info_table = table.new(position.top_right, 2, 8, bgcolor=color.new(#1e222d, 10), frame_color=color.new(#363c4e, 0), frame_width=1, border_color=color.new(#363c4e, 0), border_width=1)
+
+if barstate.islast
+    table.cell(info_table, 0, 0, "Strategy", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 0, "ST+EMA+ADX v1.0", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 0, 1, "Supertrend", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 1, str.tostring(st_period) + " / " + str.tostring(st_mult), text_color=color.white, text_size=size.small)
+    table.cell(info_table, 0, 2, "EMA", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 2, str.tostring(ema_fast) + " / " + str.tostring(ema_slow), text_color=color.white, text_size=size.small)
+    table.cell(info_table, 0, 3, "ADX", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 3, str.tostring(adx_val, "#.#") + (adx_val >= adx_thresh ? " OK" : " LOW"), text_color=adx_val >= adx_thresh ? color.green : color.red, text_size=size.small)
+    table.cell(info_table, 0, 4, "ATR", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 4, str.tostring(atr_val, "#.##"), text_color=color.white, text_size=size.small)
+    table.cell(info_table, 0, 5, "SL/TP", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 5, str.tostring(sl_mult) + "x / " + str.tostring(tp_mult) + "x ATR", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 0, 6, "Risk", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 6, str.tostring(risk_pct) + "%", text_color=color.yellow, text_size=size.small)
+    table.cell(info_table, 0, 7, "RR Ratio", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 7, "1:" + str.tostring(tp_mult / sl_mult, "#.#"), text_color=color.white, text_size=size.small)
